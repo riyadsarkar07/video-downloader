@@ -19,7 +19,7 @@ const SOCIAL_LINKS = [
   },
   {
     platform: 'facebook' as const,
-    href: 'https://facebook.com/riyadsarkar07',
+    href: 'https://www.facebook.com/RiyadSarkar007',
     label: 'Riyad on Facebook',
     color: 'text-[#1877f2]',
   },
