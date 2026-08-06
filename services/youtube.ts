@@ -1,6 +1,8 @@
 import ytdl from '@distube/ytdl-core';
+import { Cookie } from 'tough-cookie';
 import type { MediaFormat, MediaInfo } from '@/lib/types';
 import { ExtractionError } from '@/services/http';
+import { extractYouTubeWithCobalt } from '@/services/cobalt';
 
 interface NormalizedFormat {
   quality: string;
@@ -10,15 +12,33 @@ interface NormalizedFormat {
   container: 'mp4' | 'webm' | 'm4a' | 'mp3';
 }
 
-const YTDL_OPTIONS: ytdl.getInfoOptions = {
-  requestOptions: {
-    headers: {
-      'user-agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-      'accept-language': 'en-US,en;q=0.9',
-    },
-  },
-};
+const USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+function buildGetInfoOptions(): ytdl.getInfoOptions {
+  const requestHeaders: Record<string, string> = {
+    'user-agent': USER_AGENT,
+    'accept-language': 'en-US,en;q=0.9',
+  };
+
+  const rawCookie = process.env.YOUTUBE_COOKIE;
+  const options: ytdl.getInfoOptions = {
+    lang: 'en',
+    requestOptions: { headers: requestHeaders },
+  };
+
+  if (rawCookie && rawCookie.trim()) {
+    const cookies = rawCookie
+      .split(';')
+      .map((cookie) => Cookie.parse(cookie.trim()))
+      .filter((cookie): cookie is Cookie => cookie !== null && cookie !== undefined);
+    if (cookies.length > 0) {
+      options.agent = ytdl.createAgent(cookies);
+    }
+  }
+
+  return options;
+}
 
 function extractVideoId(url: string): string {
   const match =
@@ -105,31 +125,15 @@ function normalizeAudio(
   ];
 }
 
-export async function extractYouTube(rawUrl: string): Promise<MediaInfo> {
-  const videoId = extractVideoId(rawUrl);
-  let info: ytdl.videoInfo;
-  try {
-    info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, YTDL_OPTIONS);
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    const message = error instanceof Error ? error.message : '';
-    if (/bot|sign in to confirm|captcha|verify/i.test(message)) {
-      throw new ExtractionError(
-        'YouTube is currently blocking automated access from this network. Please try again later.',
-        'YT_BOT_BLOCKED',
-      );
-    }
-    throw new ExtractionError(
-      'We could not extract this video. It may be private, region-locked, or age-restricted.',
-      'YT_EXTRACT_FAILED',
-    );
-  }
-
+function toMediaInfo(videoId: string, info: ytdl.videoInfo): MediaInfo {
   const durationSeconds = info.videoDetails.lengthSeconds
     ? Number(info.videoDetails.lengthSeconds)
     : null;
 
-  const progressive = normalizeProgressive(ytdl.filterFormats(info.formats, 'videoandaudio'), durationSeconds);
+  const progressive = normalizeProgressive(
+    ytdl.filterFormats(info.formats, 'videoandaudio'),
+    durationSeconds,
+  );
   const audio = normalizeAudio(info.formats, durationSeconds);
 
   const formats: MediaFormat[] = [
@@ -161,13 +165,53 @@ export async function extractYouTube(rawUrl: string): Promise<MediaInfo> {
     platform: 'youtube',
     title: info.videoDetails.title,
     thumbnail:
-      info.videoDetails.thumbnails.sort((a, b) => b.width * b.height - a.width * a.height)[0]?.url ??
-      info.videoDetails.thumbnails[0]?.url ??
-      null,
+      info.videoDetails.thumbnails.sort((a, b) => b.width * b.height - a.width * a.height)[0]
+        ?.url ?? info.videoDetails.thumbnails[0]?.url ?? null,
     duration: durationSeconds,
     width: null,
     height: null,
     author: info.videoDetails.author?.name ?? null,
     formats,
   };
+}
+
+export async function extractYouTube(rawUrl: string): Promise<MediaInfo> {
+  const videoId = extractVideoId(rawUrl);
+  const canonicalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  try {
+    const info = await ytdl.getInfo(canonicalUrl, buildGetInfoOptions());
+    return toMediaInfo(videoId, info);
+  } catch (error) {
+    if (error instanceof ExtractionError) throw error;
+    const message = error instanceof Error ? error.message : '';
+
+    if (/bot|sign in to confirm|captcha|verify|403|forbidden|unavailable/i.test(message)) {
+      const fallback = await tryCobaltFallback(canonicalUrl, videoId);
+      if (fallback) return fallback;
+      throw new ExtractionError(
+        'YouTube is currently blocking automated access from this network. A free fallback service also failed. Please try again later.',
+        'YT_BOT_BLOCKED',
+      );
+    }
+
+    const fallback = await tryCobaltFallback(canonicalUrl, videoId);
+    if (fallback) return fallback;
+
+    throw new ExtractionError(
+      'We could not extract this video. It may be private, region-locked, or age-restricted.',
+      'YT_EXTRACT_FAILED',
+    );
+  }
+}
+
+async function tryCobaltFallback(url: string, videoId: string): Promise<MediaInfo | null> {
+  try {
+    return await extractYouTubeWithCobalt(url);
+  } catch (cobaltError) {
+    if (cobaltError instanceof ExtractionError) {
+      console.warn(`Cobalt fallback failed for ${videoId}:`, cobaltError.message);
+    }
+    return null;
+  }
 }
