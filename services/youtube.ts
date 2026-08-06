@@ -2,6 +2,7 @@ import ytdl from '@distube/ytdl-core';
 import { Cookie } from 'tough-cookie';
 import type { MediaFormat, MediaInfo } from '@/lib/types';
 import { ExtractionError } from '@/services/http';
+import { extractYouTubeWithInvidious } from '@/services/invidious';
 import { extractYouTubeWithCobalt } from '@/services/cobalt';
 
 interface NormalizedFormat {
@@ -186,22 +187,41 @@ export async function extractYouTube(rawUrl: string): Promise<MediaInfo> {
     if (error instanceof ExtractionError) throw error;
     const message = error instanceof Error ? error.message : '';
 
+    const fallback = await tryFallbacks(canonicalUrl, videoId);
+    if (fallback) return fallback;
+
     if (/bot|sign in to confirm|captcha|verify|403|forbidden|unavailable/i.test(message)) {
-      const fallback = await tryCobaltFallback(canonicalUrl, videoId);
-      if (fallback) return fallback;
       throw new ExtractionError(
-        'YouTube is currently blocking automated access from this network. A free fallback service also failed. Please try again later.',
+        'YouTube is currently blocking automated access from this network. Public fallback services were also unreachable. Please try again later.',
         'YT_BOT_BLOCKED',
       );
     }
-
-    const fallback = await tryCobaltFallback(canonicalUrl, videoId);
-    if (fallback) return fallback;
 
     throw new ExtractionError(
       'We could not extract this video. It may be private, region-locked, or age-restricted.',
       'YT_EXTRACT_FAILED',
     );
+  }
+}
+
+async function tryFallbacks(url: string, videoId: string): Promise<MediaInfo | null> {
+  const invidious = await tryInvidiousFallback(videoId);
+  if (invidious) return invidious;
+
+  const cobalt = await tryCobaltFallback(url, videoId);
+  if (cobalt) return cobalt;
+
+  return null;
+}
+
+async function tryInvidiousFallback(videoId: string): Promise<MediaInfo | null> {
+  try {
+    return await extractYouTubeWithInvidious(videoId);
+  } catch (invidiousError) {
+    if (invidiousError instanceof ExtractionError) {
+      console.warn(`Invidious fallback failed for ${videoId}:`, invidiousError.message);
+    }
+    return null;
   }
 }
 

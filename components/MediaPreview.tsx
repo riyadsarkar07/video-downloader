@@ -64,11 +64,9 @@ export function MediaPreview({ info }: MediaPreviewProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -16, scale: 0.98 }}
-      transition={{ duration: 0.35, ease: 'easeOut' }}
-      className="glass-card mt-5 overflow-hidden"
+      transition={{ duration: 0.25 }}
+      className="glass-card fade-in-up mt-5 overflow-hidden"
     >
       <div className="grid gap-0 md:grid-cols-[minmax(0,360px)_1fr]">
         <div className="relative aspect-video bg-slate-900 md:aspect-auto md:min-h-[240px]">
@@ -162,7 +160,7 @@ export function MediaPreview({ info }: MediaPreviewProps) {
                     onClick={() => handleDownload(format)}
                     disabled={downloadingId !== null}
                     className={clsx(
-                      'group flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all',
+                      'group hover-lift flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left',
                       'border-white/10 bg-white/[0.03] hover:border-brand-400/50 hover:bg-brand-500/10',
                       'disabled:cursor-not-allowed disabled:opacity-60',
                     )}

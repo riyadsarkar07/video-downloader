@@ -16,11 +16,22 @@ interface PinVideo {
 }
 
 function resolveImageOriginal(imageUrl: string): string {
-  const match = imageUrl.match(/\/i\.pinimg\.com\/(\d+x|x{2,}|originals|736x|564x|474x)\//);
+  const match = imageUrl.match(/\/i\.pinimg\.com\/(?:[a-z0-9]*x|originals)\//i);
   if (match) {
     return imageUrl.replace(match[0], '/i.pinimg.com/originals/');
   }
   return imageUrl;
+}
+
+function extractOrigImageUrl(html: string): string | null {
+  const pattern = /"orig"\s*:\s*\{[^}]*?"url"\s*:\s*"((?:https?:)?\\?\/\\?\/[^"\\]+)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) {
+    const decoded = jsonUnescape(match[1]).replace(/\\\//g, '/');
+    const clean = htmlDecode(decoded);
+    if (clean.startsWith('https://')) return clean;
+  }
+  return null;
 }
 
 function extractVideoUrlsFromHtml(html: string): PinVideo[] {
@@ -106,8 +117,12 @@ export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
     'Pinterest Pin';
   const ogImage = extractMetaTag(html, 'og:image') ?? extractMetaTag(html, 'twitter:image');
   const ldImages = collectLdJsonImages(html);
+  const origImage = extractOrigImageUrl(html);
   const rawThumbnail =
-    ldImages.find((url) => /originals|1200x|736x/.test(url)) ?? ldImages[0] ?? ogImage;
+    origImage ??
+    ldImages.find((url) => /originals|1200x|736x/.test(url)) ??
+    ldImages[0] ??
+    ogImage;
 
   const videos = extractVideoUrlsFromHtml(html);
 

@@ -1,6 +1,27 @@
 import Link from 'next/link';
-import { Github, ShieldCheck } from 'lucide-react';
+import { Heart, ShieldCheck } from 'lucide-react';
 import { PlatformIcon } from '@/components/icons';
+
+const SOCIAL_LINKS = [
+  {
+    platform: 'youtube' as const,
+    href: 'https://youtube.com/@youare_special07',
+    label: 'Riyad on YouTube',
+    color: 'text-[#ff0033] hover:bg-[#ff0033]/10 hover:text-[#ff0033]',
+  },
+  {
+    platform: 'facebook' as const,
+    href: 'https://facebook.com/riyadsarkar07',
+    label: 'Riyad on Facebook',
+    color: 'text-[#1877f2] hover:bg-[#1877f2]/10 hover:text-[#1877f2]',
+  },
+  {
+    platform: 'pinterest' as const,
+    href: 'https://pinterest.com/riyadsarkar07',
+    label: 'Riyad on Pinterest',
+    color: 'text-[#e60023] hover:bg-[#e60023]/10 hover:text-[#e60023]',
+  },
+];
 
 export function Footer() {
   return (
@@ -13,6 +34,21 @@ export function Footer() {
               A fast, privacy-friendly, zero-cost downloader for YouTube, Facebook, and Pinterest
               content.
             </p>
+            <div className="mt-4 flex items-center gap-2">
+              {SOCIAL_LINKS.map((social) => (
+                <a
+                  key={social.platform}
+                  href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={social.label}
+                  title={social.label}
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all duration-300 hover:scale-110 ${social.color}`}
+                >
+                  <PlatformIcon platform={social.platform} className="h-4 w-4" />
+                </a>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -53,23 +89,18 @@ export function Footer() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 text-xs text-slate-500 sm:flex-row">
-          <p>© {new Date().getFullYear()} UniDownloader. Download responsibly.</p>
-          <div className="flex items-center gap-4">
-            <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-              No data stored, ever
-            </span>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="GitHub repository"
-              className="inline-flex items-center gap-1.5 transition-colors hover:text-white"
-            >
-              <Github className="h-3.5 w-3.5" aria-hidden="true" />
-              Source
-            </a>
-          </div>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+            No data stored, ever
+          </span>
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300">
+            Designed &amp; Developed with
+            <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" aria-label="love" />
+            by Riyad
+            <span className="text-slate-600">|</span>
+            All Rights Reserved
+          </p>
+          <p className="text-slate-500">© {new Date().getFullYear()} UniDownloader</p>
         </div>
       </div>
     </footer>

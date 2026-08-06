@@ -6,6 +6,7 @@ import type { ExtractResponse } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 interface ExtractBody {
   url?: unknown;
@@ -38,10 +39,15 @@ export async function POST(request: Request): Promise<NextResponse<ExtractRespon
     );
   }
 
+  const startedAt = Date.now();
   try {
     const data = await extractMedia(url);
+    console.info(
+      `Extraction succeeded for ${data.platform} in ${Date.now() - startedAt}ms`,
+    );
     return NextResponse.json({ success: true, data });
   } catch (error) {
+    console.info(`Extraction failed in ${Date.now() - startedAt}ms`);
     if (error instanceof ExtractionError) {
       return NextResponse.json(
         { success: false, error: error.message, code: error.code },

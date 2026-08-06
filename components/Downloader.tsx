@@ -122,7 +122,7 @@ export function Downloader() {
 
   return (
     <section className="relative z-10 mx-auto w-full max-w-3xl px-4 sm:px-6">
-      <div className="glass-card p-3 shadow-2xl shadow-black/40 sm:p-5">
+      <div className="glass-card glow-card p-3 sm:p-5">
         <div className="flex items-stretch gap-2">
           <div className="relative flex-1">
             <Link2
