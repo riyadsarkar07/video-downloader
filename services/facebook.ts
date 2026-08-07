@@ -9,6 +9,7 @@ import {
   resolveRedirectTarget,
 } from '@/services/http';
 import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
+import { stripTrackingParams } from '@/lib/platforms';
 
 const VIDEO_PATTERNS: Array<{ key: string; quality: string; label: string }> = [
   { key: 'browser_native_hd_url', quality: 'HD', label: 'HD MP4' },
@@ -20,10 +21,12 @@ const VIDEO_PATTERNS: Array<{ key: string; quality: string; label: string }> = [
 ];
 
 function canonicalizeFacebookUrl(rawUrl: string): string {
-  return rawUrl
-    .replace(/^https?:\/\/(www\.|m\.|web\.|touch\.|mbasic\.)?facebook\.com/i, 'https://www.facebook.com')
-    .replace(/^https?:\/\/fb\.watch\//i, 'https://www.facebook.com/')
-    .split('#')[0];
+  return stripTrackingParams(
+    rawUrl
+      .replace(/^https?:\/\/(www\.|m\.|web\.|touch\.|mbasic\.)?facebook\.com/i, 'https://www.facebook.com')
+      .replace(/^https?:\/\/fb\.watch\//i, 'https://www.facebook.com/')
+      .split('#')[0],
+  );
 }
 
 async function resolveShareLink(rawUrl: string): Promise<string | null> {

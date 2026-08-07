@@ -123,11 +123,14 @@ export async function fetchHtmlViaProxies(
   return null;
 }
 
-export async function fetchJsonViaProxies(url: string): Promise<unknown | null> {
+export async function fetchJsonViaProxies(
+  url: string,
+  timeoutMs = 20000,
+): Promise<unknown | null> {
   const builders = getCorsProxyBuilders();
   for (const build of builders) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const proxiedUrl = build(url);
       const response = await fetch(proxiedUrl, {

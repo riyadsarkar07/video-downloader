@@ -114,6 +114,8 @@ function buildFormats(video: InvidiousVideo): MediaFormat[] {
   return formats;
 }
 
+const INVIDIOUS_TIMEOUT_MS = 3500;
+
 export async function extractYouTubeWithInvidious(videoId: string): Promise<MediaInfo | null> {
   const instances = getInstances();
   let lastError: string | null = null;
@@ -121,7 +123,7 @@ export async function extractYouTubeWithInvidious(videoId: string): Promise<Medi
   for (const instance of instances) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
+      const timeout = setTimeout(() => controller.abort(), INVIDIOUS_TIMEOUT_MS);
       const response = await fetch(
         `${instance}/api/v1/videos/${videoId}?fields=title,author,lengthSeconds,thumbnailUrl,formatStreams,adaptiveFormats`,
         {
@@ -145,7 +147,7 @@ export async function extractYouTubeWithInvidious(videoId: string): Promise<Medi
       lastError = 'no formats';
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        lastError = 'timeout';
+        lastError = `timeout (${INVIDIOUS_TIMEOUT_MS}ms)`;
       } else {
         lastError = error instanceof Error ? error.message : 'unknown';
       }
@@ -156,6 +158,7 @@ export async function extractYouTubeWithInvidious(videoId: string): Promise<Medi
   if (instances.length > 0) {
     const proxied = await fetchJsonViaProxies(
       `${instances[0]}/api/v1/videos/${videoId}?fields=title,author,lengthSeconds,thumbnailUrl,formatStreams,adaptiveFormats`,
+      INVIDIOUS_TIMEOUT_MS,
     );
     if (proxied && typeof proxied === 'object') {
       const built = buildInvidiousInfo(proxied as InvidiousVideo);

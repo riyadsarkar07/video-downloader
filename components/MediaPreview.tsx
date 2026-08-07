@@ -301,46 +301,48 @@ export function MediaPreview({ info }: MediaPreviewProps) {
                     onClick={() => triggerDownload(format)}
                     disabled={downloadingId !== null}
                     className={clsx(
-                      'group hover-lift relative flex items-center justify-between gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left',
+                      'group hover-lift relative flex flex-col items-start gap-1 overflow-hidden rounded-xl border p-3 text-left',
                       tierMeta.button,
                       'disabled:cursor-not-allowed disabled:opacity-60',
                     )}
                   >
-                    <span
-                      className={clsx(
-                        'absolute right-2.5 top-2 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
-                        tierMeta.badge,
-                      )}
-                    >
-                      {t(tierMeta.labelKey)}
-                    </span>
-                    <span className="flex items-center gap-3">
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={clsx(
+                            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+                            tierMeta.badge,
+                          )}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <span className="truncate text-sm font-semibold leading-tight text-white">
+                          {format.label}
+                        </span>
+                      </span>
                       <span
                         className={clsx(
-                          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border',
+                          'shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide',
                           tierMeta.badge,
                         )}
                       >
-                        <Icon className="h-4 w-4" aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0 pr-16">
-                        <span className="block truncate text-sm font-semibold text-white">
-                          {format.label}
-                        </span>
-                        <span className="block text-xs text-slate-400">
-                          {format.quality}
-                          {format.size ? ` · ${formatBytes(format.size)}` : ''}
-                        </span>
+                        {t(tierMeta.labelKey)}
                       </span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-1.5 text-white/80 transition-colors group-hover:text-white">
-                      {isBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Download className="h-4 w-4" aria-hidden="true" />
-                      )}
-                      <span className="hidden text-xs font-medium sm:inline">
-                        {isBusy ? t('starting') : t('save')}
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="pl-10 text-xs leading-snug text-slate-400">
+                        {format.quality}
+                        {format.size ? ` · ${formatBytes(format.size)}` : ''}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-white/80 transition-colors group-hover:text-white">
+                        {isBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Download className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        <span className="hidden text-xs font-medium sm:inline">
+                          {isBusy ? t('starting') : t('save')}
+                        </span>
                       </span>
                     </span>
                   </button>

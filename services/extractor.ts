@@ -1,5 +1,5 @@
 import type { MediaInfo, Platform } from '@/lib/types';
-import { detectPlatform } from '@/lib/platforms';
+import { cleanInputUrl, detectPlatform } from '@/lib/platforms';
 import { ExtractionError } from '@/services/http';
 import { extractYouTube } from '@/services/youtube';
 import { extractFacebook } from '@/services/facebook';
@@ -23,12 +23,13 @@ const SUPPORTED_LABEL =
   'YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, or Pinterest';
 
 export async function extractMedia(url: string): Promise<MediaInfo> {
-  const platform = detectPlatform(url);
+  const cleaned = cleanInputUrl(url);
+  const platform = detectPlatform(cleaned);
   if (!platform) {
     throw new ExtractionError(
       `This link is not supported. Please paste a valid ${SUPPORTED_LABEL} link.`,
       'UNSUPPORTED_PLATFORM',
     );
   }
-  return EXTRACTORS[platform](url);
+  return EXTRACTORS[platform](cleaned);
 }

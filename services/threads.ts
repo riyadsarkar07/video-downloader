@@ -12,7 +12,7 @@ import { parseCarouselMedia, parseSingleMedia } from '@/services/mediaUtils';
 
 function canonicalizeThreadsUrl(rawUrl: string): string {
   return rawUrl
-    .replace(/^https?:\/\/(www\.)?threads\.net/i, 'https://www.threads.net')
+    .replace(/^https?:\/\/(www\.)?threads\.(?:net|com)/i, 'https://www.threads.net')
     .split('?')[0]
     .split('#')[0];
 }
@@ -170,7 +170,7 @@ function parseThreadsHtml(html: string): MediaInfo | null {
 
 export async function extractThreads(rawUrl: string): Promise<MediaInfo> {
   const canonical = canonicalizeThreadsUrl(rawUrl.trim());
-  if (!/threads\.net\/@[\w.-]+\/post\/|threads\.net\/post\//i.test(canonical)) {
+  if (!/threads\.(net|com)\/(?:@[\w.-]+\/)?post\//i.test(canonical)) {
     throw new ExtractionError('This does not look like a valid Threads link.', 'INVALID_LINK');
   }
 

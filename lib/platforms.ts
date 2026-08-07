@@ -34,8 +34,10 @@ const TWITTER_PATTERNS: RegExp[] = [
 ];
 
 const THREADS_PATTERNS: RegExp[] = [
+  /(?:threads\.net|threads\.com)\/@[\w.-]+\/post\/[A-Za-z0-9_-]+/i,
+  /(?:threads\.net|threads\.com)\/post\/[A-Za-z0-9_-]+/i,
   /threads\.net\/@[\w.-]+\/post\/[A-Za-z0-9_-]+/i,
-  /threads\.net\/post\/[A-Za-z0-9_-]+/i,
+  /threads\.com\/@[\w.-]+\/post\/[A-Za-z0-9_-]+/i,
 ];
 
 const PINTEREST_PATTERNS: RegExp[] = [
@@ -54,8 +56,54 @@ const PATTERN_MAP: Record<Platform, RegExp[]> = {
   pinterest: PINTEREST_PATTERNS,
 };
 
+const TRACKING_PARAMS = [
+  'igsh',
+  'igshid',
+  'mibextid',
+  'fbclid',
+  'gclid',
+  'gclsrc',
+  'dclid',
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'utm_id',
+  'mc_cid',
+  'mc_eid',
+  '_hsenc',
+  '_hsmi',
+  'xtor',
+  'cmpid',
+];
+
+export function stripTrackingParams(input: string): string {
+  try {
+    const url = new URL(input);
+    const keys = Array.from(url.searchParams.keys());
+    let changed = false;
+    for (const key of keys) {
+      if (TRACKING_PARAMS.some((tracking) => tracking === key.toLowerCase())) {
+        url.searchParams.delete(key);
+        changed = true;
+      }
+    }
+    return changed ? url.toString() : input;
+  } catch {
+    return input;
+  }
+}
+
+export function cleanInputUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return stripTrackingParams(withScheme);
+}
+
 export function detectPlatform(url: string): Platform | null {
-  const normalized = url.trim();
+  const normalized = stripTrackingParams(url.trim());
   if (!normalized) return null;
   for (const platform of Object.keys(PATTERN_MAP) as Platform[]) {
     if (PATTERN_MAP[platform].some((pattern) => pattern.test(normalized))) {
@@ -70,10 +118,7 @@ export function isSupportedUrl(url: string): boolean {
 }
 
 export function normalizeUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://${trimmed}`;
+  return cleanInputUrl(rawUrl);
 }
 
 export const PLATFORM_META: Record<
