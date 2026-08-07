@@ -131,8 +131,9 @@ export function extractInlineJson(html: string, marker: string): unknown | null 
   const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const startMatch = html.search(new RegExp(escaped));
   if (startMatch === -1) return null;
-  const start = html.indexOf('{', startMatch);
-  if (start === -1) return null;
+  const openIdx = html.slice(startMatch).search(/[\[{]/);
+  if (openIdx === -1) return null;
+  const start = startMatch + openIdx;
   let depth = 0;
   let inString = false;
   let escapedChar = false;
@@ -150,9 +151,9 @@ export function extractInlineJson(html: string, marker: string): unknown | null 
     }
     if (char === '"') {
       inString = true;
-    } else if (char === '{') {
+    } else if (char === '{' || char === '[') {
       depth += 1;
-    } else if (char === '}') {
+    } else if (char === '}' || char === ']') {
       depth -= 1;
       if (depth === 0) {
         const candidate = html.slice(start, i + 1);

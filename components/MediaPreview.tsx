@@ -12,11 +12,12 @@ import {
   ImageIcon,
   Loader2,
   Music,
+  Play,
 } from 'lucide-react';
 import { PLATFORM_META } from '@/lib/platforms';
 import { buildDownloadUrl, clsx, ensureExtension, formatBytes, formatDuration } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import type { MediaFormat, MediaInfo } from '@/lib/types';
+import type { MediaFormat, MediaInfo, MediaItem } from '@/lib/types';
 import { PlatformIcon } from '@/components/icons';
 
 interface MediaPreviewProps {
@@ -80,7 +81,15 @@ export function MediaPreview({ info }: MediaPreviewProps) {
   const { t } = useI18n();
   const [customFilename, setCustomFilename] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const meta = PLATFORM_META[info.platform];
+
+  const items: MediaItem[] | null =
+    info.items && info.items.length > 0 ? info.items : null;
+  const activeItem = items ? items[Math.min(activeIndex, items.length - 1)] : null;
+  const formats = activeItem ? activeItem.formats : info.formats;
+  const thumbnail = activeItem?.thumbnail ?? info.thumbnail;
+  const hasVideo = formats.some((format) => format.kind === 'video');
 
   const triggerDownload = (format: MediaFormat) => {
     const baseName = customFilename.trim() || info.title || 'download';
@@ -105,8 +114,10 @@ export function MediaPreview({ info }: MediaPreviewProps) {
   const defaultName = info.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 120);
   const baseName = customFilename.trim() || defaultName || 'download';
 
-  const hasVideo = info.formats.some((format) => format.kind === 'video');
-  const showThumbnail = Boolean(info.thumbnail) && (hasVideo || info.platform === 'youtube');
+  const showThumbnail =
+    Boolean(info.thumbnail) &&
+    !items &&
+    (info.formats.some((format) => format.kind === 'video') || info.platform === 'youtube');
 
   const thumbnailFormat: MediaFormat | null = info.thumbnail
     ? {
@@ -120,11 +131,10 @@ export function MediaPreview({ info }: MediaPreviewProps) {
       }
     : null;
 
-  const allFormats = showThumbnail && thumbnailFormat
-    ? [...info.formats, thumbnailFormat]
-    : info.formats;
+  const allFormats =
+    showThumbnail && thumbnailFormat ? [...formats, thumbnailFormat] : formats;
 
-  const firstFormat = info.formats[0] ?? thumbnailFormat;
+  const firstFormat = formats[0] ?? thumbnailFormat;
   const firstBadge = firstFormat
     ? TIER_META[getTier(firstFormat)].badge
     : 'bg-brand-500/15 text-brand-300 border-brand-400/20';
@@ -137,9 +147,9 @@ export function MediaPreview({ info }: MediaPreviewProps) {
     >
       <div className="grid gap-0 md:grid-cols-[minmax(0,360px)_1fr]">
         <div className="relative aspect-video bg-slate-900 md:aspect-auto md:min-h-[240px]">
-          {info.thumbnail ? (
+          {thumbnail ? (
             <img
-              src={info.thumbnail}
+              src={thumbnail}
               alt={info.title}
               className="absolute inset-0 h-full w-full object-cover"
               loading="lazy"
@@ -147,6 +157,13 @@ export function MediaPreview({ info }: MediaPreviewProps) {
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-hero-gradient/20">
               <Film className="h-12 w-12 text-white/40" aria-hidden="true" />
+            </div>
+          )}
+          {activeItem?.kind === 'video' && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur">
+                <Play className="h-6 w-6 translate-x-0.5" aria-hidden="true" />
+              </span>
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
@@ -160,10 +177,15 @@ export function MediaPreview({ info }: MediaPreviewProps) {
               <PlatformIcon platform={info.platform} className="h-3.5 w-3.5" />
               {meta.label}
             </span>
-            {info.duration !== null && (
+            {activeItem?.kind === 'video' && info.duration !== null && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
                 <Clock className="h-3 w-3" aria-hidden="true" />
                 {formatDuration(info.duration)}
+              </span>
+            )}
+            {items && items.length > 1 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white backdrop-blur">
+                {activeIndex + 1}/{items.length}
               </span>
             )}
           </div>
@@ -175,7 +197,7 @@ export function MediaPreview({ info }: MediaPreviewProps) {
           </h3>
 
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-400">
-            {info.duration !== null && (
+            {activeItem?.kind === 'video' && info.duration !== null && (
               <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" aria-hidden="true" /> {formatDuration(info.duration)}
               </span>
@@ -188,9 +210,59 @@ export function MediaPreview({ info }: MediaPreviewProps) {
             )}
             <span className="inline-flex items-center gap-1.5">
               <Film className="h-3.5 w-3.5" aria-hidden="true" />
-              {allFormats.length} {allFormats.length === 1 ? t('option') : t('options')}
+              {items
+                ? `${items.length} ${items.length === 1 ? 'media' : 'media'}`
+                : `${allFormats.length} ${allFormats.length === 1 ? t('option') : t('options')}`}
             </span>
           </div>
+
+          {items && items.length > 1 && (
+            <div className="mt-4">
+              <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Media items">
+                {items.map((item, index) => {
+                  const isActive = index === activeIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveIndex(index)}
+                      className={clsx(
+                        'group relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all duration-300',
+                        isActive
+                          ? 'border-brand-400 shadow-glow'
+                          : 'border-white/10 opacity-60 hover:opacity-100',
+                      )}
+                      title={item.kind === 'video' ? 'Video' : 'Photo'}
+                    >
+                      {item.thumbnail ? (
+                        <img
+                          src={item.thumbnail}
+                          alt={`${index + 1}`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center bg-slate-800 text-slate-400">
+                          {item.kind === 'video' ? (
+                            <Play className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </span>
+                      )}
+                      {item.kind === 'video' && (
+                        <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 p-0.5 text-white">
+                          <Play className="h-2.5 w-2.5" aria-hidden="true" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <label className="mt-5 block">
             <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-400">
@@ -207,7 +279,7 @@ export function MediaPreview({ info }: MediaPreviewProps) {
                 aria-label="Custom filename"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                .{info.formats[0]?.ext ?? 'mp4'}
+                .{firstFormat?.ext ?? 'mp4'}
               </span>
             </div>
           </label>

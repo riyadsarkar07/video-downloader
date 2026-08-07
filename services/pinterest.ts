@@ -7,6 +7,7 @@ import {
   htmlDecode,
   jsonUnescape,
 } from '@/services/http';
+import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
 
 interface PinVideo {
   url: string;
@@ -97,20 +98,7 @@ function collectLdJsonImages(html: string): string[] {
   return images;
 }
 
-export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
-  const trimmed = rawUrl.trim();
-  if (!/pinterest\.[a-z.]+\/pin\/|pin\.it\//i.test(trimmed)) {
-    throw new ExtractionError('This does not look like a valid Pinterest pin link.', 'INVALID_LINK');
-  }
-
-  let html = '';
-  try {
-    html = await fetchHtml(trimmed);
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    throw new ExtractionError('Unable to reach this Pinterest pin.', 'PIN_FETCH_FAILED');
-  }
-
+function parsePinterestHtml(html: string): MediaInfo | null {
   const title =
     extractMetaTag(html, 'og:title') ??
     extractMetaTag(html, 'twitter:title') ??
@@ -133,7 +121,7 @@ export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
       formats.push({
         id: `pin-video-${index}`,
         kind: 'video',
-        label: video.label,
+        label: index === 0 ? 'Ultra HD Video' : video.label,
         quality: video.quality,
         ext: 'mp4',
         url: video.url,
@@ -147,7 +135,7 @@ export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
     formats.push({
       id: 'pin-image-full',
       kind: 'image',
-      label: 'Full Resolution JPG',
+      label: 'High-Res Photo',
       quality: 'Original',
       ext: 'jpg',
       url: original,
@@ -164,25 +152,51 @@ export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
     });
   }
 
-  if (formats.length === 0) {
-    throw new ExtractionError(
-      'We could not find any downloadable media on this pin.',
-      'NO_MEDIA_FOUND',
-    );
-  }
+  if (formats.length === 0) return null;
 
   const firstVideo = videos[0];
-  const width = 1000;
-  const height = 1500;
 
   return {
     platform: 'pinterest',
     title,
     thumbnail: rawThumbnail ?? null,
     duration: firstVideo?.duration ?? null,
-    width,
-    height,
+    width: 1000,
+    height: 1500,
     author: null,
     formats,
   };
+}
+
+async function scrapePinterest(rawUrl: string): Promise<MediaInfo | null> {
+  try {
+    const html = await fetchHtml(rawUrl);
+    return parsePinterestHtml(html);
+  } catch {
+    return null;
+  }
+}
+
+export async function extractPinterest(rawUrl: string): Promise<MediaInfo> {
+  const trimmed = rawUrl.trim();
+  if (!/pinterest\.[a-z.]+\/pin\/|pin\.it\//i.test(trimmed)) {
+    throw new ExtractionError('This does not look like a valid Pinterest pin link.', 'INVALID_LINK');
+  }
+
+  const direct = await scrapePinterest(trimmed);
+  if (direct) return direct;
+
+  const proxiedHtml = await fetchHtmlViaProxies(trimmed);
+  if (proxiedHtml) {
+    const parsed = parsePinterestHtml(proxiedHtml);
+    if (parsed) return parsed;
+  }
+
+  const cobalt = await extractWithCobalt('pinterest', trimmed);
+  if (cobalt) return cobalt;
+
+  throw new ExtractionError(
+    'We could not find any downloadable media on this pin. It may be private or Pinterest is blocking automated access from this network.',
+    'PIN_EXTRACT_FAILED',
+  );
 }

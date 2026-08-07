@@ -6,6 +6,7 @@ import {
   htmlDecode,
   jsonUnescape,
 } from '@/services/http';
+import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
 
 function canonicalizeXUrl(rawUrl: string): string {
   return rawUrl
@@ -87,32 +88,12 @@ function extractImages(html: string): string[] {
   return images;
 }
 
-export async function extractTwitter(rawUrl: string): Promise<MediaInfo> {
-  const canonical = canonicalizeXUrl(rawUrl.trim());
-  if (!/x\.com\/(?:[\w.]+\/)?status\/\d+/i.test(canonical)) {
-    throw new ExtractionError('This does not look like a valid X / Twitter link.', 'INVALID_LINK');
-  }
-
-  let html = '';
-  try {
-    html = await fetchHtml(canonical, {
-      referer: 'https://x.com/',
-      accept:
-        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    });
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    throw new ExtractionError(
-      'Unable to reach this tweet. The account may be private, or X is blocking automated access.',
-      'X_FETCH_FAILED',
-    );
-  }
-
-  if (/<title>[^<]*log in to x[^<]*<\/title>/i.test(html) || /not authorized|you are not allowed/i.test(html)) {
-    throw new ExtractionError(
-      'This tweet requires login or is no longer accessible from the public web.',
-      'X_LOGIN_REQUIRED',
-    );
+function parseTwitterHtml(html: string): MediaInfo | null {
+  if (
+    /<title>[^<]*log in to x[^<]*<\/title>/i.test(html) ||
+    /not authorized|you are not allowed/i.test(html)
+  ) {
+    return null;
   }
 
   const videos = extractMp4Urls(html);
@@ -167,10 +148,7 @@ export async function extractTwitter(rawUrl: string): Promise<MediaInfo> {
   }
 
   if (formats.length === 0) {
-    throw new ExtractionError(
-      'We could not find downloadable media in this tweet. It may only contain text or be restricted.',
-      'NO_MEDIA_FOUND',
-    );
+    return null;
   }
 
   return {
@@ -183,4 +161,43 @@ export async function extractTwitter(rawUrl: string): Promise<MediaInfo> {
     author: description,
     formats,
   };
+}
+
+async function scrapeTwitter(canonical: string): Promise<MediaInfo | null> {
+  try {
+    const html = await fetchHtml(canonical, {
+      referer: 'https://x.com/',
+      accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    });
+    return parseTwitterHtml(html);
+  } catch {
+    return null;
+  }
+}
+
+export async function extractTwitter(rawUrl: string): Promise<MediaInfo> {
+  const canonical = canonicalizeXUrl(rawUrl.trim());
+  if (!/x\.com\/(?:[\w.]+\/)?status\/\d+/i.test(canonical)) {
+    throw new ExtractionError('This does not look like a valid X / Twitter link.', 'INVALID_LINK');
+  }
+
+  const direct = await scrapeTwitter(canonical);
+  if (direct) return direct;
+
+  const proxiedHtml = await fetchHtmlViaProxies(canonical, {
+    referer: 'https://x.com/',
+  });
+  if (proxiedHtml) {
+    const parsed = parseTwitterHtml(proxiedHtml);
+    if (parsed) return parsed;
+  }
+
+  const cobalt = await extractWithCobalt('twitter', canonical);
+  if (cobalt) return cobalt;
+
+  throw new ExtractionError(
+    'We could not find downloadable media in this tweet. It may only contain text, be restricted, or X is blocking automated access from this network.',
+    'X_EXTRACT_FAILED',
+  );
 }

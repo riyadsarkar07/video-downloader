@@ -1,13 +1,14 @@
-import type { MediaFormat, MediaInfo } from '@/lib/types';
+import type { MediaFormat, MediaInfo, MediaItem } from '@/lib/types';
 import {
   ExtractionError,
-  extractInlineJson,
   extractJsonLd,
   extractMetaTag,
   fetchHtml,
   htmlDecode,
   jsonUnescape,
 } from '@/services/http';
+import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
+import { parseCarouselMedia, parseSingleMedia } from '@/services/mediaUtils';
 
 function canonicalizeThreadsUrl(rawUrl: string): string {
   return rawUrl
@@ -16,7 +17,11 @@ function canonicalizeThreadsUrl(rawUrl: string): string {
     .split('#')[0];
 }
 
-function extractVideoUrls(html: string): string[] {
+function looksLikeLoginWall(html: string): boolean {
+  return /login_required|log in to continue|sign in to continue/i.test(html);
+}
+
+function extractRegexVideos(html: string): string[] {
   const urls: string[] = [];
   const seen = new Set<string>();
 
@@ -36,15 +41,6 @@ function extractVideoUrls(html: string): string[] {
     extractMetaTag(html, 'og:video:url') ??
     extractMetaTag(html, 'og:video');
   if (ogVideo && !/threads\.net/.test(ogVideo)) push(ogVideo);
-
-  const videoVersions = html.match(/"video_versions"\s*:\s*\[[\s\S]*?\]/);
-  if (videoVersions) {
-    const urlMatches = videoVersions[0].match(/"url"\s*:\s*"([^"]+)"/g) ?? [];
-    urlMatches.forEach((match) => {
-      const url = match.match(/"url"\s*:\s*"([^"]+)"/);
-      if (url?.[1]) push(url[1]);
-    });
-  }
 
   const downloadable = html.match(/"downloadable_videos"\s*:\s*\[\s*[^\]]*?\]/g);
   downloadable?.forEach((block) => {
@@ -74,7 +70,7 @@ function extractVideoUrls(html: string): string[] {
   return urls;
 }
 
-function extractImages(html: string): string[] {
+function extractRegexImages(html: string): string[] {
   const images: string[] = [];
   const seen = new Set<string>();
 
@@ -95,111 +91,69 @@ function extractImages(html: string): string[] {
     extractMetaTag(html, 'twitter:image');
   if (ogImage) push(ogImage);
 
-  const carousel = html.match(/"carousel_media"\s*:\s*\[[\s\S]*?\]/);
-  if (carousel) {
-    const urlMatches = carousel[0].match(/"url"\s*:\s*"([^"]+)"/g) ?? [];
-    urlMatches.forEach((match) => {
-      const url = match.match(/"url"\s*:\s*"([^"]+)"/);
-      if (url?.[1]) push(url[1]);
-    });
-  }
-
-  const inline = extractInlineJson(html, 'image_versions2');
-  const walk = (value: unknown) => {
-    if (typeof value === 'string') {
-      if (/^https?:\/\//.test(value) && /\.(jpe?g|png|webp)(\?|$)/i.test(value)) push(value);
-      return;
-    }
-    if (Array.isArray(value)) {
-      value.forEach(walk);
-      return;
-    }
-    if (value && typeof value === 'object') {
-      Object.values(value).forEach(walk);
-    }
-  };
-  walk(inline);
-
   return images;
 }
 
-export async function extractThreads(rawUrl: string): Promise<MediaInfo> {
-  const canonical = canonicalizeThreadsUrl(rawUrl.trim());
-  if (!/threads\.net\/@[\w.-]+\/post\/|threads\.net\/post\//i.test(canonical)) {
-    throw new ExtractionError('This does not look like a valid Threads link.', 'INVALID_LINK');
-  }
+function parseThreadsHtml(html: string): MediaInfo | null {
+  if (looksLikeLoginWall(html)) return null;
 
-  let html = '';
-  try {
-    html = await fetchHtml(canonical, {
-      referer: 'https://www.threads.net/',
-      accept:
-        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    });
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    throw new ExtractionError(
-      'Unable to reach this Threads post. It may be private or deleted.',
-      'THREADS_FETCH_FAILED',
-    );
+  let items: MediaItem[] = parseCarouselMedia(html);
+  if (items.length === 0) {
+    const single = parseSingleMedia(html);
+    if (single) items = [single];
   }
-
-  const videos = extractVideoUrls(html);
-  const images = extractImages(html);
 
   const title =
     extractMetaTag(html, 'og:title') ??
     extractMetaTag(html, 'twitter:title') ??
     'Threads Post';
+  const thumbnail =
+    items[0]?.thumbnail ??
+    extractMetaTag(html, 'og:image:secure_url') ??
+    extractMetaTag(html, 'og:image') ??
+    null;
   const description = extractMetaTag(html, 'og:description') ?? null;
-  const thumbnail = images[0] ?? null;
 
-  const formats: MediaFormat[] = [];
+  const formats: MediaFormat[] = items.flatMap((item) => item.formats);
 
-  if (videos.length > 0) {
-    const best = videos[0];
-    formats.push({
-      id: 'th-video-best',
-      kind: 'video',
-      label: 'HD MP4',
-      quality: 'HD',
-      ext: 'mp4',
-      url: best,
-      size: null,
-    });
-    if (videos[1]) {
-      formats.push({
-        id: 'th-video-alt',
+  if (formats.length === 0) {
+    const videos = extractRegexVideos(html);
+    const images = extractRegexImages(html);
+    if (videos.length > 0) {
+      const format: MediaFormat = {
+        id: 'th-video-best',
         kind: 'video',
-        label: 'MP4',
-        quality: 'Source',
+        label: 'Ultra HD Video',
+        quality: 'HD',
         ext: 'mp4',
-        url: videos[1],
+        url: videos[0],
         size: null,
+      };
+      formats.push(format);
+      items = [{ id: 'item-0', kind: 'video', label: '1', thumbnail, formats: [format] }];
+    } else if (images.length > 0) {
+      images.slice(0, 10).forEach((image, index) => {
+        formats.push({
+          id: `th-image-${index}`,
+          kind: 'image',
+          label: index === 0 ? 'High-Res Photo' : `Photo ${index + 1}`,
+          quality: 'High-Res',
+          ext: 'jpg',
+          url: image,
+          size: null,
+        });
       });
+      items = formats.map((format, index) => ({
+        id: `item-${index}`,
+        kind: 'image',
+        label: `${index + 1}`,
+        thumbnail: format.url,
+        formats: [format],
+      }));
     }
   }
 
-  if (images.length > 0) {
-    images.slice(0, 10).forEach((image, index) => {
-      formats.push({
-        id: `th-image-${index}`,
-        kind: 'image',
-        label: index === 0 ? 'Full Resolution JPG' : `Photo ${index + 1} JPG`,
-        quality: 'Original',
-        ext: 'jpg',
-        url: image,
-        size: null,
-      });
-    });
-  }
-
-  if (formats.length === 0) {
-    throw new ExtractionError(
-      'We could not find downloadable media in this post. It may only contain text or be restricted.',
-      'NO_MEDIA_FOUND',
-    );
-  }
+  if (formats.length === 0) return null;
 
   return {
     platform: 'threads',
@@ -210,5 +164,41 @@ export async function extractThreads(rawUrl: string): Promise<MediaInfo> {
     height: null,
     author: description,
     formats,
+    items,
   };
+}
+
+export async function extractThreads(rawUrl: string): Promise<MediaInfo> {
+  const canonical = canonicalizeThreadsUrl(rawUrl.trim());
+  if (!/threads\.net\/@[\w.-]+\/post\/|threads\.net\/post\//i.test(canonical)) {
+    throw new ExtractionError('This does not look like a valid Threads link.', 'INVALID_LINK');
+  }
+
+  try {
+    const html = await fetchHtml(canonical, {
+      referer: 'https://www.threads.net/',
+      accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    });
+    const parsed = parseThreadsHtml(html);
+    if (parsed) return parsed;
+  } catch {
+    // fall through to proxies and Cobalt
+  }
+
+  const proxiedHtml = await fetchHtmlViaProxies(canonical, {
+    referer: 'https://www.threads.net/',
+  });
+  if (proxiedHtml) {
+    const parsed = parseThreadsHtml(proxiedHtml);
+    if (parsed) return parsed;
+  }
+
+  const cobalt = await extractWithCobalt('threads', canonical);
+  if (cobalt) return cobalt;
+
+  throw new ExtractionError(
+    'We could not find downloadable media in this Threads post. It may be private or only contain text.',
+    'THREADS_EXTRACT_FAILED',
+  );
 }

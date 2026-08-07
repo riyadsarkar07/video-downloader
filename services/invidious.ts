@@ -1,5 +1,6 @@
 import type { MediaFormat, MediaInfo } from '@/lib/types';
 import { ExtractionError } from '@/services/http';
+import { fetchJsonViaProxies } from '@/services/fallbackEngine';
 
 const DEFAULT_INSTANCES = [
   'https://inv.nadeko.net',
@@ -139,22 +140,9 @@ export async function extractYouTubeWithInvidious(videoId: string): Promise<Medi
       }
 
       const video = (await response.json()) as InvidiousVideo;
-      const formats = buildFormats(video);
-      if (formats.length === 0) {
-        lastError = 'no formats';
-        continue;
-      }
-
-      return {
-        platform: 'youtube',
-        title: video.title ?? 'YouTube Video',
-        thumbnail: video.thumbnailUrl ?? null,
-        duration: video.lengthSeconds ?? null,
-        width: null,
-        height: null,
-        author: video.author ?? null,
-        formats,
-      };
+      const built = buildInvidiousInfo(video);
+      if (built) return built;
+      lastError = 'no formats';
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         lastError = 'timeout';
@@ -165,6 +153,32 @@ export async function extractYouTubeWithInvidious(videoId: string): Promise<Medi
     }
   }
 
+  if (instances.length > 0) {
+    const proxied = await fetchJsonViaProxies(
+      `${instances[0]}/api/v1/videos/${videoId}?fields=title,author,lengthSeconds,thumbnailUrl,formatStreams,adaptiveFormats`,
+    );
+    if (proxied && typeof proxied === 'object') {
+      const built = buildInvidiousInfo(proxied as InvidiousVideo);
+      if (built) return built;
+    }
+  }
+
   console.warn(`Invidious fallback failed for ${videoId}: ${lastError ?? 'no instances configured'}`);
   return null;
+}
+
+function buildInvidiousInfo(video: InvidiousVideo): MediaInfo | null {
+  const formats = buildFormats(video);
+  if (formats.length === 0) return null;
+
+  return {
+    platform: 'youtube',
+    title: video.title ?? 'YouTube Video',
+    thumbnail: video.thumbnailUrl ?? null,
+    duration: video.lengthSeconds ?? null,
+    width: null,
+    height: null,
+    author: video.author ?? null,
+    formats,
+  };
 }

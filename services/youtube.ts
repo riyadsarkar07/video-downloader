@@ -217,6 +217,9 @@ async function tryFallbacks(url: string, videoId: string): Promise<MediaInfo | n
   const cobalt = await tryCobaltFallback(url, videoId);
   if (cobalt) return cobalt;
 
+  const invidiousAgain = await tryInvidiousFallback(videoId);
+  if (invidiousAgain) return invidiousAgain;
+
   return null;
 }
 

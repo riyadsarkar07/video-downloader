@@ -9,6 +9,7 @@ import {
   htmlDecode,
   jsonUnescape,
 } from '@/services/http';
+import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
 
 function cleanTikTokUrl(rawUrl: string): string {
   const decoded = jsonUnescape(rawUrl).replace(/\\\//g, '/');
@@ -121,29 +122,7 @@ function extractVideoUrlsFromHtml(html: string): string[] {
   return urls;
 }
 
-export async function extractTikTok(rawUrl: string): Promise<MediaInfo> {
-  const trimmed = rawUrl.trim();
-  if (
-    !/tiktok\.com\/(@[\w.-]+\/(video|photo)\/|video\/|t\/)|(vt|vm)\.tiktok\.com\//i.test(trimmed)
-  ) {
-    throw new ExtractionError('This does not look like a valid TikTok link.', 'INVALID_LINK');
-  }
-
-  let html = '';
-  try {
-    html = await fetchHtml(trimmed, {
-      referer: 'https://www.tiktok.com/',
-      accept:
-        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    });
-  } catch (error) {
-    if (error instanceof ExtractionError) throw error;
-    throw new ExtractionError(
-      'Unable to reach this TikTok video. It may be private or deleted.',
-      'TT_FETCH_FAILED',
-    );
-  }
-
+function parseTikTokHtml(html: string): MediaInfo | null {
   const universalData = extractScriptJson(html, '__UNIVERSAL_DATA_FOR_REHYDRATION__');
   const fallbackData = extractInlineJson(html, '__UNIVERSAL_DATA_FOR_REHYDRATION__');
 
@@ -256,10 +235,7 @@ export async function extractTikTok(rawUrl: string): Promise<MediaInfo> {
   const thumbnail = cover ?? ogImage ?? null;
 
   if (formats.length === 0) {
-    throw new ExtractionError(
-      'We could not find a downloadable video on this TikTok page. It may be private or restricted.',
-      'NO_MEDIA_FOUND',
-    );
+    return null;
   }
 
   return {
@@ -272,4 +248,46 @@ export async function extractTikTok(rawUrl: string): Promise<MediaInfo> {
     author,
     formats,
   };
+}
+
+async function scrapeTikTok(rawUrl: string): Promise<MediaInfo | null> {
+  let html = '';
+  try {
+    html = await fetchHtml(rawUrl, {
+      referer: 'https://www.tiktok.com/',
+      accept:
+        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    });
+  } catch {
+    return null;
+  }
+  return parseTikTokHtml(html);
+}
+
+export async function extractTikTok(rawUrl: string): Promise<MediaInfo> {
+  const trimmed = rawUrl.trim();
+  if (
+    !/tiktok\.com\/(@[\w.-]+\/(video|photo)\/|video\/|t\/)|(vt|vm)\.tiktok\.com\//i.test(trimmed)
+  ) {
+    throw new ExtractionError('This does not look like a valid TikTok link.', 'INVALID_LINK');
+  }
+
+  const direct = await scrapeTikTok(trimmed);
+  if (direct) return direct;
+
+  const proxiedHtml = await fetchHtmlViaProxies(trimmed, {
+    referer: 'https://www.tiktok.com/',
+  });
+  if (proxiedHtml) {
+    const parsed = parseTikTokHtml(proxiedHtml);
+    if (parsed) return parsed;
+  }
+
+  const cobalt = await extractWithCobalt('tiktok', trimmed);
+  if (cobalt) return cobalt;
+
+  throw new ExtractionError(
+    'We could not find a downloadable video on this TikTok page. It may be private or restricted, or the platform is blocking automated access from this network.',
+    'TT_EXTRACT_FAILED',
+  );
 }

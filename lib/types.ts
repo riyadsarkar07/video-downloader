@@ -14,11 +14,19 @@ export interface MediaFormat {
   kind: MediaKind;
   label: string;
   quality: string;
-  ext: 'mp4' | 'mp3' | 'jpg' | 'webm' | 'm4a';
+  ext: 'mp4' | 'mp3' | 'jpg' | 'webm' | 'm4a' | 'png' | 'webp' | 'gif';
   url: string;
   size: number | null;
   width?: number;
   height?: number;
+}
+
+export interface MediaItem {
+  id: string;
+  kind: 'video' | 'image';
+  label: string;
+  thumbnail: string | null;
+  formats: MediaFormat[];
 }
 
 export interface MediaInfo {
@@ -30,6 +38,7 @@ export interface MediaInfo {
   height: number | null;
   author: string | null;
   formats: MediaFormat[];
+  items?: MediaItem[];
 }
 
 export interface ExtractSuccessResponse {

@@ -1,4 +1,4 @@
-import type { MediaFormat, MediaInfo } from '@/lib/types';
+import type { MediaFormat, MediaInfo, MediaItem } from '@/lib/types';
 import {
   ExtractionError,
   extractJsonLd,
@@ -8,6 +8,7 @@ import {
   jsonUnescape,
   resolveRedirectTarget,
 } from '@/services/http';
+import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
 
 const VIDEO_PATTERNS: Array<{ key: string; quality: string; label: string }> = [
   { key: 'browser_native_hd_url', quality: 'HD', label: 'HD MP4' },
@@ -96,6 +97,46 @@ function extractVideoUrls(
   return found;
 }
 
+function extractPhotoUrls(html: string): string[] {
+  const photos: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (rawUrl: string) => {
+    const decoded = jsonUnescape(rawUrl).replace(/\\\//g, '/');
+    const clean = htmlDecode(decoded).split('"')[0].trim();
+    if (!clean.startsWith('https://')) return;
+    if (!/(scontent|fbcdn|cdninstagram)/i.test(clean)) return;
+    if (seen.has(clean)) return;
+    seen.add(clean);
+    photos.push(clean);
+  };
+
+  const patterns = [
+    /"image"\s*:\s*"((?:https?:)?\\?\/\\?\/scontent[^"]+)"/g,
+    /"uri"\s*:\s*"((?:https?:)?\\?\/\\?\/[^"]*scontent[^"]+)"/g,
+    /"image_uri"\s*:\s*"((?:https?:)?\\?\/\\?\/[^"]+)"/g,
+    /"image_url"\s*:\s*"((?:https?:)?\\?\/\\?\/[^"]+)"/g,
+    /"src"\s*:\s*"((?:https?:)?\\?\/\\?\/scontent[^"]+)"/g,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(html)) !== null) {
+      const raw = match[1];
+      if (!raw) continue;
+      const resolved = raw.startsWith('//') ? `https:${raw}` : raw;
+      push(resolved);
+    }
+  }
+
+  const ogImage =
+    extractMetaTag(html, 'og:image:secure_url') ??
+    extractMetaTag(html, 'og:image') ??
+    extractMetaTag(html, 'twitter:image');
+  if (ogImage) push(ogImage);
+
+  return photos;
+}
+
 function collectJsonLdVideoUrls(html: string): string[] {
   const urls: string[] = [];
   const ld = extractJsonLd(html);
@@ -144,50 +185,110 @@ function dedupeAndSort(
   );
 }
 
-interface PageResult {
-  html: string;
+interface PageContent {
   videos: Array<{ url: string; quality: string; label: string }>;
+  photos: string[];
+  title: string;
+  thumbnail: string | null;
   fetched: boolean;
 }
 
-async function tryFetchCandidate(candidate: string): Promise<PageResult> {
-  try {
-    const html = await fetchHtml(candidate, {
-      referer: 'https://www.facebook.com/',
-      accept:
-        'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    });
-    if (looksLikeLoginWall(html)) {
-      return { html: '', videos: [], fetched: true };
-    }
-    const videos = dedupeAndSort(extractVideoUrls(html));
-    const ldVideos = collectJsonLdVideoUrls(html);
-    const fallback = extractFallbackVideo(html);
-    const resultVideos = [...videos];
-    const seen = new Set(resultVideos.map((video) => video.url));
-    for (const ldUrl of ldVideos) {
-      if (!seen.has(ldUrl)) {
-        seen.add(ldUrl);
-        resultVideos.push({ url: ldUrl, quality: 'SD', label: 'SD MP4' });
-      }
-    }
-    if (fallback && !seen.has(fallback)) {
-      resultVideos.push({ url: fallback, quality: 'SD', label: 'SD MP4' });
-    }
-    return { html, videos: resultVideos, fetched: true };
-  } catch {
-    return { html: '', videos: [], fetched: false };
+async function parseFacebookHtml(html: string): Promise<PageContent> {
+  if (looksLikeLoginWall(html)) {
+    return { videos: [], photos: [], title: 'Facebook Post', thumbnail: null, fetched: true };
   }
-}
 
-function extractTitleAndThumbnail(html: string): { title: string; thumbnail: string | null } {
+  const videos = dedupeAndSort(extractVideoUrls(html));
+  const ldVideos = collectJsonLdVideoUrls(html);
+  const fallbackVideo = extractFallbackVideo(html);
+  const seen = new Set(videos.map((video) => video.url));
+  for (const ldUrl of ldVideos) {
+    if (!seen.has(ldUrl)) {
+      seen.add(ldUrl);
+      videos.push({ url: ldUrl, quality: 'SD', label: 'SD MP4' });
+    }
+  }
+  if (fallbackVideo && !seen.has(fallbackVideo)) {
+    videos.push({ url: fallbackVideo, quality: 'SD', label: 'SD MP4' });
+  }
+
+  const photos = extractPhotoUrls(html);
   const title =
     extractMetaTag(html, 'og:title') ??
     extractMetaTag(html, 'twitter:title') ??
-    'Facebook Video';
-  const thumbnail =
-    extractMetaTag(html, 'og:image') ?? extractMetaTag(html, 'twitter:image') ?? null;
-  return { title, thumbnail };
+    'Facebook Post';
+  const thumbnail = photos[0] ?? extractMetaTag(html, 'og:image') ?? null;
+
+  return { videos, photos, title, thumbnail, fetched: true };
+}
+
+interface FacebookPayload {
+  title: string;
+  thumbnail: string | null;
+  videos: Array<{ url: string; quality: string; label: string }>;
+  photos: string[];
+}
+
+function buildFacebookMediaInfo(payload: FacebookPayload): MediaInfo | null {
+  const { title, thumbnail, videos, photos } = payload;
+  const items: MediaItem[] = [];
+  const formats: MediaFormat[] = [];
+
+  if (videos.length > 0) {
+    const videoFormats: MediaFormat[] = videos.map((video, index) => ({
+      id: `fb-video-${index}`,
+      kind: 'video',
+      label: video.label,
+      quality: video.quality,
+      ext: 'mp4',
+      url: video.url,
+      size: null,
+    }));
+    formats.push(...videoFormats);
+    items.push({
+      id: 'item-video',
+      kind: 'video',
+      label: 'Video',
+      thumbnail,
+      formats: videoFormats,
+    });
+  }
+
+  if (photos.length > 0) {
+    photos.slice(0, 10).forEach((photo, index) => {
+      const photoFormat: MediaFormat = {
+        id: `fb-photo-${index}`,
+        kind: 'image',
+        label: index === 0 ? 'High-Res Photo' : `Photo ${index + 1}`,
+        quality: 'High-Res',
+        ext: 'jpg',
+        url: photo,
+        size: null,
+      };
+      formats.push(photoFormat);
+      items.push({
+        id: `item-photo-${index}`,
+        kind: 'image',
+        label: `${index + 1}`,
+        thumbnail: photo,
+        formats: [photoFormat],
+      });
+    });
+  }
+
+  if (formats.length === 0) return null;
+
+  return {
+    platform: 'facebook',
+    title,
+    thumbnail: thumbnail ?? items[0]?.thumbnail ?? null,
+    duration: null,
+    width: null,
+    height: null,
+    author: null,
+    formats,
+    items,
+  };
 }
 
 export async function extractFacebook(rawUrl: string): Promise<MediaInfo> {
@@ -197,54 +298,66 @@ export async function extractFacebook(rawUrl: string): Promise<MediaInfo> {
   }
 
   const candidates = await buildCandidates(trimmed);
-  let lastHtml = '';
   let fetchedAny = false;
-  let bestVideos: Array<{ url: string; quality: string; label: string }> = [];
+  let bestPayload: FacebookPayload | null = null;
 
   for (const candidate of candidates) {
-    const result = await tryFetchCandidate(candidate);
-    if (result.fetched) fetchedAny = true;
-    if (result.html) lastHtml = result.html;
-    if (result.videos.length > bestVideos.length) {
-      bestVideos = result.videos;
-      lastHtml = result.html;
+    try {
+      const html = await fetchHtml(candidate, {
+        referer: 'https://www.facebook.com/',
+        accept:
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      });
+      const content = await parseFacebookHtml(html);
+      if (content.fetched) fetchedAny = true;
+      const candidatePayload: FacebookPayload = {
+        title: content.title,
+        thumbnail: content.thumbnail,
+        videos: content.videos,
+        photos: content.photos,
+      };
+      const built = buildFacebookMediaInfo(candidatePayload);
+      if (built && (!bestPayload || built.formats.length > 0)) {
+        bestPayload = candidatePayload;
+      }
+      if (bestPayload && bestPayload.videos.length > 0 && bestPayload.videos.some((video) => video.quality === 'HD')) {
+        break;
+      }
+    } catch {
+      continue;
     }
-    if (bestVideos.length > 0 && bestVideos.some((video) => video.quality === 'HD')) break;
   }
 
-  if (bestVideos.length === 0) {
-    if (!fetchedAny) {
-      throw new ExtractionError(
-        'Unable to reach this Facebook post. Facebook may be blocking automated access; please try again later.',
-        'FB_FETCH_FAILED',
-      );
-    }
+  if (bestPayload) {
+    const built = buildFacebookMediaInfo(bestPayload);
+    if (built) return built;
+  }
+
+  const proxiedHtml = await fetchHtmlViaProxies(candidates[0], {
+    referer: 'https://www.facebook.com/',
+  });
+  if (proxiedHtml) {
+    const content = await parseFacebookHtml(proxiedHtml);
+    const built = buildFacebookMediaInfo({
+      title: content.title,
+      thumbnail: content.thumbnail,
+      videos: content.videos,
+      photos: content.photos,
+    });
+    if (built) return built;
+  }
+
+  const cobalt = await extractWithCobalt('facebook', candidates[0]);
+  if (cobalt) return cobalt;
+
+  if (!fetchedAny) {
     throw new ExtractionError(
-      'We could not find a downloadable video on this page. The post may be private, or it may only contain photos.',
-      'NO_VIDEO_FOUND',
+      'Unable to reach this Facebook post. Facebook may be blocking automated access; please try again later.',
+      'FB_FETCH_FAILED',
     );
   }
-
-  const { title, thumbnail } = extractTitleAndThumbnail(lastHtml);
-
-  const formats: MediaFormat[] = bestVideos.map((video, index) => ({
-    id: `fb-${index}`,
-    kind: 'video',
-    label: video.label,
-    quality: video.quality,
-    ext: 'mp4',
-    url: video.url,
-    size: null,
-  }));
-
-  return {
-    platform: 'facebook',
-    title,
-    thumbnail,
-    duration: null,
-    width: null,
-    height: null,
-    author: null,
-    formats,
-  };
+  throw new ExtractionError(
+    'We could not find any downloadable video or photo on this page. The post may be private or deleted.',
+    'NO_MEDIA_FOUND',
+  );
 }
