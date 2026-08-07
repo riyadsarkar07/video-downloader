@@ -1,4 +1,11 @@
-export type Platform = 'youtube' | 'facebook' | 'pinterest';
+export type Platform =
+  | 'youtube'
+  | 'facebook'
+  | 'instagram'
+  | 'tiktok'
+  | 'twitter'
+  | 'threads'
+  | 'pinterest';
 
 export type MediaKind = 'video' | 'audio' | 'image';
 

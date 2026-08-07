@@ -47,11 +47,17 @@ function extractVideoId(url: string): string {
     url.match(/youtu\.be\/([A-Za-z0-9_-]{11})/) ||
     url.match(/shorts\/([A-Za-z0-9_-]{11})/) ||
     url.match(/embed\/([A-Za-z0-9_-]{11})/) ||
-    url.match(/live\/([A-Za-z0-9_-]{11})/);
+    url.match(/live\/([A-Za-z0-9_-]{11})/) ||
+    url.match(/youtube\.com\/v\/([A-Za-z0-9_-]{11})/);
   if (!match) {
     throw new ExtractionError('This does not look like a valid YouTube link.', 'INVALID_LINK');
   }
   return match[1];
+}
+
+export function normalizeYouTubeUrl(rawUrl: string): string {
+  const videoId = extractVideoId(rawUrl);
+  return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
 function estimateSize(format: ytdl.videoFormat, durationSeconds: number | null): number | null {
@@ -178,7 +184,7 @@ function toMediaInfo(videoId: string, info: ytdl.videoInfo): MediaInfo {
 
 export async function extractYouTube(rawUrl: string): Promise<MediaInfo> {
   const videoId = extractVideoId(rawUrl);
-  const canonicalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const canonicalUrl = normalizeYouTubeUrl(rawUrl);
 
   try {
     const info = await ytdl.getInfo(canonicalUrl, buildGetInfoOptions());

@@ -4,51 +4,29 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { clsx } from '@/lib/utils';
-
-const FAQS = [
-  {
-    question: 'Is this service really free?',
-    answer:
-      'Yes. Extraction runs entirely inside the app’s own server functions. There are no third-party paid APIs, no API keys, and no hidden costs.',
-  },
-  {
-    question: 'Will the download open in a new tab?',
-    answer:
-      'No. Every download streams through our proxy route with a strict attachment header, which forces your browser to open the native “Save File” dialog immediately — on both desktop and mobile.',
-  },
-  {
-    question: 'Which formats can I download?',
-    answer:
-      'YouTube: MP4 video (up to available progressive quality) and MP3 audio. Facebook: HD/SD MP4 video. Pinterest: MP4 video pins and full-resolution JPG images.',
-  },
-  {
-    question: 'Why is 1080p not always available on YouTube?',
-    answer:
-      'YouTube serves 1080p+ as separate video and audio streams that require server-side merging. Since we run on stateless serverless functions with zero external APIs, we expose the best combined (progressive) formats plus MP3 audio.',
-  },
-  {
-    question: 'What if the link is private or deleted?',
-    answer:
-      'The parser will return a clear, friendly error message. We only support public content that is legally shareable — please respect creators’ rights.',
-  },
-  {
-    question: 'Is my data stored anywhere?',
-    answer:
-      'No. Links are processed in-memory and immediately discarded. We never log, store, or share the content you download.',
-  },
-];
+import { useI18n } from '@/lib/i18n';
 
 export function Faq() {
+  const { t } = useI18n();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  const FAQS: Array<{ question: string; answer: string }> = [
+    { question: t('faq1q'), answer: t('faq1a') },
+    { question: t('faq2q'), answer: t('faq2a') },
+    { question: t('faq3q'), answer: t('faq3a') },
+    { question: t('faq4q'), answer: t('faq4a') },
+    { question: t('faq5q'), answer: t('faq5a') },
+    { question: t('faq6q'), answer: t('faq6a') },
+  ];
 
   return (
     <section id="faq" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="text-center">
         <span className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">
-          FAQ
+          {t('faqBadge')}
         </span>
         <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Frequently asked questions
+          {t('faqTitle')}
         </h2>
       </div>
 

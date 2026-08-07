@@ -1,6 +1,11 @@
+'use client';
+
 import Link from 'next/link';
 import { Heart, ShieldCheck } from 'lucide-react';
 import { PlatformIcon } from '@/components/icons';
+import { useI18n } from '@/lib/i18n';
+import type { DictKey } from '@/lib/i18n';
+import type { Platform } from '@/lib/types';
 
 const SOCIAL_LINKS = [
   {
@@ -23,7 +28,19 @@ const SOCIAL_LINKS = [
   },
 ];
 
+const SUPPORTED: Array<{ platform: Platform; color: string; labelKey: DictKey }> = [
+  { platform: 'youtube', color: 'text-[#ff0033]', labelKey: 'footerPlatformYt' },
+  { platform: 'facebook', color: 'text-[#1877f2]', labelKey: 'footerPlatformFb' },
+  { platform: 'instagram', color: 'text-[#e4405f]', labelKey: 'footerPlatformIg' },
+  { platform: 'tiktok', color: 'text-[#25f4ee]', labelKey: 'footerPlatformTt' },
+  { platform: 'twitter', color: 'text-[#1d9bf0]', labelKey: 'footerPlatformX' },
+  { platform: 'threads', color: 'text-slate-200', labelKey: 'footerPlatformTh' },
+  { platform: 'pinterest', color: 'text-[#e60023]', labelKey: 'footerPlatformPin' },
+];
+
 export function Footer() {
+  const { t } = useI18n();
+
   return (
     <footer className="border-t border-white/5 bg-surface/50">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -31,8 +48,7 @@ export function Footer() {
           <div>
             <p className="text-sm font-semibold text-white">Universal Media Downloader</p>
             <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-400">
-              A fast, privacy-friendly, zero-cost downloader for YouTube, Facebook, and Pinterest
-              content.
+              {t('footerTagline')}
             </p>
             <div className="mt-4 flex items-center gap-2">
               {SOCIAL_LINKS.map((social) => (
@@ -52,36 +68,33 @@ export function Footer() {
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-white">Supported Platforms</p>
+            <p className="text-sm font-semibold text-white">{t('footerSupported')}</p>
             <ul className="mt-2 space-y-1.5 text-sm text-slate-400">
-              <li className="flex items-center gap-2">
-                <PlatformIcon platform="youtube" className="h-3.5 w-3.5 text-[#ff0033]" /> Videos &amp; MP3
-              </li>
-              <li className="flex items-center gap-2">
-                <PlatformIcon platform="facebook" className="h-3.5 w-3.5 text-[#1877f2]" /> Videos
-              </li>
-              <li className="flex items-center gap-2">
-                <PlatformIcon platform="pinterest" className="h-3.5 w-3.5 text-[#e60023]" /> Videos &amp; Images
-              </li>
+              {SUPPORTED.map((item) => (
+                <li key={item.platform} className="flex items-center gap-2">
+                  <PlatformIcon platform={item.platform} className={`h-3.5 w-3.5 ${item.color}`} />
+                  {t(item.labelKey)}
+                </li>
+              ))}
             </ul>
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-white">Resources</p>
+            <p className="text-sm font-semibold text-white">{t('footerResources')}</p>
             <ul className="mt-2 space-y-1.5 text-sm text-slate-400">
               <li>
                 <Link href="/privacy" className="transition-colors hover:text-white">
-                  Privacy Policy
+                  {t('footerPrivacy')}
                 </Link>
               </li>
               <li>
                 <Link href="/terms" className="transition-colors hover:text-white">
-                  Terms of Service
+                  {t('footerTerms')}
                 </Link>
               </li>
               <li>
                 <Link href="/contact" className="transition-colors hover:text-white">
-                  Contact
+                  {t('footerContact')}
                 </Link>
               </li>
             </ul>
@@ -91,14 +104,14 @@ export function Footer() {
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 text-xs text-slate-500 sm:flex-row">
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-            No data stored, ever
+            {t('footerNoData')}
           </span>
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300">
-            Designed &amp; Developed with
+            {t('footerDesigned')}
             <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" aria-label="love" />
-            by Riyad
+            {t('footerBy')}
             <span className="text-slate-600">|</span>
-            All Rights Reserved
+            {t('footerRights')}
           </p>
           <p className="text-slate-500">© {new Date().getFullYear()} UniDownloader</p>
         </div>

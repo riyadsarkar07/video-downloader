@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { ClipboardPaste, Link2, Loader2, X, Zap } from 'lucide-react';
 import { detectPlatform, PLATFORM_META, PLATFORM_ORDER } from '@/lib/platforms';
 import { clsx } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 import type { MediaInfo, Platform } from '@/lib/types';
 import { PlatformIcon } from '@/components/icons';
 import { MediaPreview } from '@/components/MediaPreview';
+import { ConfettiBurst } from '@/components/ConfettiBurst';
 
 type DetectionState = 'idle' | 'active' | 'busy' | 'complete' | 'error';
 
@@ -21,6 +23,7 @@ const DETECTION_PULSE: Record<DetectionState, string> = {
 };
 
 export function Downloader() {
+  const { t } = useI18n();
   const [url, setUrl] = useState('');
   const [detected, setDetected] = useState<Platform | null>(null);
   const [state, setState] = useState<DetectionState>('idle');
@@ -28,7 +31,10 @@ export function Downloader() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasting, setPasting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const platform = detectPlatform(url);
@@ -39,7 +45,29 @@ export function Downloader() {
   }, [url]);
 
   useEffect(() => {
-    return () => abortRef.current?.abort();
+    return () => {
+      abortRef.current?.abort();
+      if (progressTimer.current) clearInterval(progressTimer.current);
+    };
+  }, []);
+
+  const startProgress = useCallback(() => {
+    setProgress(10);
+    if (progressTimer.current) clearInterval(progressTimer.current);
+    progressTimer.current = setInterval(() => {
+      setProgress((current) => {
+        if (current >= 90) return current;
+        return Math.min(90, current + Math.floor(Math.random() * 9) + 3);
+      });
+    }, 180);
+  }, []);
+
+  const stopProgress = useCallback(() => {
+    if (progressTimer.current) {
+      clearInterval(progressTimer.current);
+      progressTimer.current = null;
+    }
+    setProgress(100);
   }, []);
 
   const handlePaste = useCallback(async () => {
@@ -49,37 +77,42 @@ export function Downloader() {
         const text = await navigator.clipboard.readText();
         if (text) {
           setUrl(text.trim());
-          toast.success('Link pasted from clipboard');
+          toast.success(t('linkPasted'));
         } else {
-          toast.error('Clipboard is empty');
+          toast.error(t('clipboardEmpty'));
         }
       } else {
-        toast.error('Clipboard access is blocked in this browser');
+        toast.error(t('clipboardBlocked'));
       }
     } catch {
-      toast.error('Could not read the clipboard. Paste manually instead.');
+      toast.error(t('clipboardManual'));
     } finally {
       setPasting(false);
     }
-  }, []);
+  }, [t]);
 
   const handleClear = useCallback(() => {
     abortRef.current?.abort();
+    if (progressTimer.current) {
+      clearInterval(progressTimer.current);
+      progressTimer.current = null;
+    }
     setUrl('');
     setDetected(null);
     setInfo(null);
     setError(null);
+    setProgress(0);
     setState('idle');
   }, []);
 
   const handleExtract = useCallback(async () => {
     const trimmed = url.trim();
     if (!trimmed) {
-      toast.error('Please paste a link first');
+      toast.error(t('pasteLinkFirst'));
       return;
     }
     if (!detected) {
-      toast.error('This link is not supported');
+      toast.error(t('linkNotSupported'));
       return;
     }
 
@@ -90,6 +123,7 @@ export function Downloader() {
     setLoading(true);
     setError(null);
     setState('busy');
+    startProgress();
 
     try {
       const response = await fetch('/api/extract', {
@@ -101,28 +135,35 @@ export function Downloader() {
       const payload = await response.json();
 
       if (!response.ok || !payload.success) {
+        stopProgress();
         setState('error');
-        setError(payload.error ?? 'Something went wrong. Please try again.');
-        toast.error(payload.error ?? 'Extraction failed');
+        setError(payload.error ?? t('genericError'));
+        toast.error(payload.error ?? t('extractionFailed'));
         return;
       }
 
+      stopProgress();
       setInfo(payload.data);
       setState('complete');
-      toast.success('Media ready — choose a format below');
+      setShowConfetti(true);
+      window.setTimeout(() => setShowConfetti(false), 2200);
+      toast.success(t('mediaReady'));
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      stopProgress();
       setState('error');
-      setError('Network error. Please check your connection and try again.');
-      toast.error('Could not reach the server');
+      setError(t('networkError'));
+      toast.error(t('serverUnreachable'));
     } finally {
       setLoading(false);
     }
-  }, [url, detected]);
+  }, [url, detected, t, startProgress, stopProgress]);
 
   return (
     <section className="relative z-10 mx-auto w-full max-w-3xl px-4 sm:px-6">
-      <div className="glass-card glow-card p-3 sm:p-5">
+      <div className="glass-card glow-card relative overflow-visible p-3 sm:p-5">
+        <AnimatePresence>{showConfetti && <ConfettiBurst />}</AnimatePresence>
+
         <div className="flex items-stretch gap-2">
           <div className="relative flex-1">
             <Link2
@@ -145,8 +186,8 @@ export function Downloader() {
                   void handleExtract();
                 }
               }}
-              placeholder="Paste a YouTube, Facebook, or Pinterest link…"
-              className="input-base pl-10 pr-16"
+              placeholder={t('inputPlaceholder')}
+              className="input-base pl-10 pr-20 md:pr-24"
               aria-label="Media link"
             />
             <AnimatePresence>
@@ -156,8 +197,9 @@ export function Downloader() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   onClick={handleClear}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
-                  aria-label="Clear input"
+                  className="absolute right-12 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center p-1.5 hover:bg-slate-800/80 rounded-full text-slate-400 hover:text-white transition md:right-16"
+                  aria-label={t('clearInput')}
+                  title={t('clearInput')}
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
                 </motion.button>
@@ -170,15 +212,15 @@ export function Downloader() {
             onClick={handlePaste}
             disabled={pasting}
             className="btn-ghost shrink-0 px-3 sm:px-4"
-            aria-label="Paste from clipboard"
-            title="Paste from clipboard"
+            aria-label={t('pasteFromClipboard')}
+            title={t('pasteFromClipboard')}
           >
             {pasting ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
               <ClipboardPaste className="h-4 w-4" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">Paste</span>
+            <span className="hidden sm:inline">{t('paste')}</span>
           </button>
 
           <button
@@ -192,13 +234,38 @@ export function Downloader() {
             ) : (
               <Zap className="h-4 w-4" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">{loading ? 'Extracting…' : 'Extract'}</span>
+            <span className="hidden sm:inline">{loading ? t('extracting') : t('extract')}</span>
           </button>
         </div>
 
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-4 flex items-center gap-3">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-300" aria-hidden="true" />
+                </span>
+                <div className="flex-1">
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-400">
+                  {Math.round(progress)}%
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
           <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-            Detected platform
+            {t('detectedPlatform')}
           </span>
           {PLATFORM_ORDER.map((platform) => {
             const meta = PLATFORM_META[platform];

@@ -44,6 +44,24 @@ export async function fetchHtml(url: string, headers: Record<string, string> = {
   }
 }
 
+export async function resolveRedirectTarget(url: string, timeoutMs = 8000): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: DEFAULT_HEADERS,
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    return response.url || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function extractMetaTag(html: string, property: string): string | null {
   const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const patterns = [
@@ -91,6 +109,81 @@ export function htmlDecode(input: string): string {
     .replace(/&#039;/g, "'")
     .replace(/&#x27;/g, "'")
     .replace(/&#39;/g, "'");
+}
+
+export function extractScriptJson(html: string, id?: string): unknown | null {
+  const pattern = id
+    ? new RegExp(`<script[^>]*id=["']${id}["'][^>]*>([\\s\\S]*?)<\\/script>`, 'i')
+    : null;
+  const match = pattern ? html.match(pattern) : null;
+  const raw = match?.[1]?.trim();
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // fall through to inline search
+    }
+  }
+  return null;
+}
+
+export function extractInlineJson(html: string, marker: string): unknown | null {
+  const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const startMatch = html.search(new RegExp(escaped));
+  if (startMatch === -1) return null;
+  const start = html.indexOf('{', startMatch);
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escapedChar = false;
+  for (let i = start; i < html.length; i += 1) {
+    const char = html[i];
+    if (inString) {
+      if (escapedChar) {
+        escapedChar = false;
+      } else if (char === '\\') {
+        escapedChar = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        const candidate = html.slice(start, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+export function deepSearch(obj: unknown, keys: string[], depth = 0): unknown {
+  if (obj === null || typeof obj !== 'object' || depth > 16) return undefined;
+  for (const key of keys) {
+    if (typeof obj === 'object' && key in obj) return (obj as Record<string, unknown>)[key];
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const found = deepSearch(item, keys, depth + 1);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  for (const value of Object.values(obj)) {
+    const found = deepSearch(value, keys, depth + 1);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 export function extractOembedFromHtml(html: string): { title?: string; thumbnail?: string; author?: string } {

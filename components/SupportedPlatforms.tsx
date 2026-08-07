@@ -1,14 +1,19 @@
+'use client';
+
 import { Check, Minus } from 'lucide-react';
 import { PlatformIcon } from '@/components/icons';
 import { clsx } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
+import type { DictKey } from '@/lib/i18n';
+import type { Platform } from '@/lib/types';
 
 interface PlatformFeature {
-  label: string;
+  key: DictKey;
   supported: boolean;
 }
 
 const PLATFORMS: Array<{
-  id: 'youtube' | 'facebook' | 'pinterest';
+  id: Platform;
   name: string;
   color: string;
   features: PlatformFeature[];
@@ -18,9 +23,9 @@ const PLATFORMS: Array<{
     name: 'YouTube',
     color: 'text-[#ff0033]',
     features: [
-      { label: 'HD video download', supported: true },
-      { label: 'MP3 audio extraction', supported: true },
-      { label: 'Shorts & Live support', supported: true },
+      { key: 'featYt1', supported: true },
+      { key: 'featYt2', supported: true },
+      { key: 'featYt3', supported: true },
     ],
   },
   {
@@ -28,9 +33,49 @@ const PLATFORMS: Array<{
     name: 'Facebook',
     color: 'text-[#1877f2]',
     features: [
-      { label: 'Reels & video download', supported: true },
-      { label: 'HD & SD streams', supported: true },
-      { label: 'Public post support', supported: true },
+      { key: 'featFb1', supported: true },
+      { key: 'featFb2', supported: true },
+      { key: 'featFb3', supported: true },
+    ],
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    color: 'text-[#e4405f]',
+    features: [
+      { key: 'featIg1', supported: true },
+      { key: 'featIg2', supported: true },
+      { key: 'featIg3', supported: true },
+    ],
+  },
+  {
+    id: 'tiktok',
+    name: 'TikTok',
+    color: 'text-[#25f4ee]',
+    features: [
+      { key: 'featTt1', supported: true },
+      { key: 'featTt2', supported: true },
+      { key: 'featTt3', supported: true },
+    ],
+  },
+  {
+    id: 'twitter',
+    name: 'X / Twitter',
+    color: 'text-[#1d9bf0]',
+    features: [
+      { key: 'featX1', supported: true },
+      { key: 'featX2', supported: true },
+      { key: 'featX3', supported: true },
+    ],
+  },
+  {
+    id: 'threads',
+    name: 'Threads',
+    color: 'text-slate-200',
+    features: [
+      { key: 'featTh1', supported: true },
+      { key: 'featTh2', supported: true },
+      { key: 'featTh3', supported: true },
     ],
   },
   {
@@ -38,29 +83,31 @@ const PLATFORMS: Array<{
     name: 'Pinterest',
     color: 'text-[#e60023]',
     features: [
-      { label: 'HD video pins', supported: true },
-      { label: 'Full-res image download', supported: true },
-      { label: 'Preview-size export', supported: true },
+      { key: 'featPin1', supported: true },
+      { key: 'featPin2', supported: true },
+      { key: 'featPin3', supported: true },
     ],
   },
 ];
 
 export function SupportedPlatforms() {
+  const { t } = useI18n();
+
   return (
     <section id="supported-platforms" className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="text-center">
         <span className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">
-          Supported platforms
+          {t('platformsBadge')}
         </span>
         <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Three platforms. One downloader.
+          {t('platformsTitle')}
         </h2>
         <p className="mx-auto mt-3 max-w-lg text-sm text-slate-400 sm:text-base">
-          Purpose-built native parsers for each platform — no third-party services in between.
+          {t('platformsSubtitle')}
         </p>
       </div>
 
-      <div className="mt-12 grid gap-6 md:grid-cols-3">
+      <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {PLATFORMS.map((platform) => (
           <div
             key={platform.id}
@@ -80,7 +127,7 @@ export function SupportedPlatforms() {
 
             <ul className="mt-6 space-y-3">
               {platform.features.map((feature) => (
-                <li key={feature.label} className="flex items-center gap-2.5 text-sm">
+                <li key={feature.key} className="flex items-center gap-2.5 text-sm">
                   {feature.supported ? (
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
                       <Check className="h-3 w-3" aria-hidden="true" />
@@ -91,7 +138,7 @@ export function SupportedPlatforms() {
                     </span>
                   )}
                   <span className={feature.supported ? 'text-slate-300' : 'text-slate-600'}>
-                    {feature.label}
+                    {t(feature.key)}
                   </span>
                 </li>
               ))}

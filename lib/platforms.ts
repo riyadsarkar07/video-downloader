@@ -6,10 +6,36 @@ const YOUTUBE_PATTERNS: RegExp[] = [
 ];
 
 const FACEBOOK_PATTERNS: RegExp[] = [
-  /facebook\.com\/(?:watch|reel|share\/v|groups\/[^/]+\/permalink|photo|photos|videos?)\/?.+/i,
+  /facebook\.com\/(?:watch|reel|share\/[rv]|share\/r|groups\/[^/]+\/permalink|photo|photos|videos?|story.php)\/?.+/i,
   /fb\.watch\//i,
   /facebook\.com\/[^/]+\/videos?\/?.+/i,
   /facebook\.com\/reel\/?.+/i,
+  /m\.facebook\.com\/(?:watch|reel|share\/[rv])\/.+/i,
+];
+
+const INSTAGRAM_PATTERNS: RegExp[] = [
+  /instagram\.com\/(?:reel|p|tv|stories)\/[^/?#]+/i,
+  /instagram\.com\/(?:reels)\/[^/?#]+/i,
+  /instagram\.com\/stories\/[^/?#]+\/[^/?#]+/i,
+  /instagr\.am\/(?:reel|p|tv)\/[^/?#]+/i,
+];
+
+const TIKTOK_PATTERNS: RegExp[] = [
+  /tiktok\.com\/@[\w.-]+\/video\/\d+/i,
+  /tiktok\.com\/@[\w.-]+\/photo\/\d+/i,
+  /tiktok\.com\/video\/\d+/i,
+  /vt\.tiktok\.com\/[A-Za-z0-9]+/i,
+  /vm\.tiktok\.com\/[A-Za-z0-9]+/i,
+];
+
+const TWITTER_PATTERNS: RegExp[] = [
+  /(?:x\.com|twitter\.com)\/[\w.]+\/status\/\d+/i,
+  /(?:x\.com|twitter\.com)\/status\/\d+/i,
+];
+
+const THREADS_PATTERNS: RegExp[] = [
+  /threads\.net\/@[\w.-]+\/post\/[A-Za-z0-9_-]+/i,
+  /threads\.net\/post\/[A-Za-z0-9_-]+/i,
 ];
 
 const PINTEREST_PATTERNS: RegExp[] = [
@@ -21,6 +47,10 @@ const PINTEREST_PATTERNS: RegExp[] = [
 const PATTERN_MAP: Record<Platform, RegExp[]> = {
   youtube: YOUTUBE_PATTERNS,
   facebook: FACEBOOK_PATTERNS,
+  instagram: INSTAGRAM_PATTERNS,
+  tiktok: TIKTOK_PATTERNS,
+  twitter: TWITTER_PATTERNS,
+  threads: THREADS_PATTERNS,
   pinterest: PINTEREST_PATTERNS,
 };
 
@@ -62,6 +92,30 @@ export const PLATFORM_META: Record<
     ring: 'ring-[#1877f2]/40',
     emoji: 'f',
   },
+  instagram: {
+    label: 'Instagram',
+    color: '#e4405f',
+    ring: 'ring-[#e4405f]/40',
+    emoji: '◎',
+  },
+  tiktok: {
+    label: 'TikTok',
+    color: '#25f4ee',
+    ring: 'ring-[#25f4ee]/40',
+    emoji: '♪',
+  },
+  twitter: {
+    label: 'X / Twitter',
+    color: '#1d9bf0',
+    ring: 'ring-[#1d9bf0]/40',
+    emoji: '𝕏',
+  },
+  threads: {
+    label: 'Threads',
+    color: '#e5e7eb',
+    ring: 'ring-slate-200/40',
+    emoji: '@',
+  },
   pinterest: {
     label: 'Pinterest',
     color: '#e60023',
@@ -70,4 +124,12 @@ export const PLATFORM_META: Record<
   },
 };
 
-export const PLATFORM_ORDER: Platform[] = ['youtube', 'facebook', 'pinterest'];
+export const PLATFORM_ORDER: Platform[] = [
+  'youtube',
+  'facebook',
+  'instagram',
+  'tiktok',
+  'twitter',
+  'threads',
+  'pinterest',
+];

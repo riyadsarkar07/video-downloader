@@ -6,6 +6,7 @@ import {
   fetchHtml,
   htmlDecode,
   jsonUnescape,
+  resolveRedirectTarget,
 } from '@/services/http';
 
 const VIDEO_PATTERNS: Array<{ key: string; quality: string; label: string }> = [
@@ -24,9 +25,22 @@ function canonicalizeFacebookUrl(rawUrl: string): string {
     .split('#')[0];
 }
 
-function buildCandidates(rawUrl: string): string[] {
+async function resolveShareLink(rawUrl: string): Promise<string | null> {
+  const target = await resolveRedirectTarget(rawUrl);
+  if (!target || target === rawUrl) return null;
+  const clean = target.split('#')[0];
+  if (!/facebook\.com\/(?:watch|reel|videos?|photo)/i.test(clean)) return null;
+  return clean;
+}
+
+async function buildCandidates(rawUrl: string): Promise<string[]> {
   const desktop = canonicalizeFacebookUrl(rawUrl.trim());
   const candidates: string[] = [desktop];
+
+  const resolved = await resolveShareLink(desktop);
+  if (resolved && resolved !== desktop) {
+    candidates.unshift(resolved);
+  }
 
   const withoutQuery = desktop.split('?')[0];
   if (withoutQuery !== desktop && withoutQuery.length > 0) {
@@ -182,7 +196,7 @@ export async function extractFacebook(rawUrl: string): Promise<MediaInfo> {
     throw new ExtractionError('This does not look like a valid Facebook link.', 'INVALID_LINK');
   }
 
-  const candidates = buildCandidates(trimmed);
+  const candidates = await buildCandidates(trimmed);
   let lastHtml = '';
   let fetchedAny = false;
   let bestVideos: Array<{ url: string; quality: string; label: string }> = [];

@@ -2,31 +2,38 @@ import type { Metadata, Viewport } from 'next';
 import { Toaster } from 'sonner';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
+import { I18nProvider } from '@/lib/i18n';
 import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://unidownloader.vercel.app'),
   title: {
-    default: 'Universal Media Downloader — YouTube, Facebook & Pinterest',
+    default: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
     template: '%s · Universal Media Downloader',
   },
   description:
-    'Download videos, MP3 audio, and high-resolution images from YouTube, Facebook, and Pinterest for free. No API keys, no sign-ups, direct save-file downloads on mobile and desktop.',
+    'Download videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest for free. No API keys, no sign-ups, direct save-file downloads on mobile and desktop.',
   keywords: [
     'video downloader',
     'youtube downloader',
     'facebook downloader',
+    'instagram downloader',
+    'tiktok downloader',
+    'twitter downloader',
+    'x video downloader',
+    'threads downloader',
     'pinterest downloader',
     'mp3 downloader',
     'hd video download',
+    'no watermark tiktok',
   ],
   openGraph: {
     type: 'website',
     url: 'https://unidownloader.vercel.app',
     siteName: 'Universal Media Downloader',
-    title: 'Universal Media Downloader — YouTube, Facebook & Pinterest',
+    title: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
     description:
-      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, and Pinterest — directly to your device in one tap.',
+      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest — directly to your device in one tap.',
     images: [
       {
         url: '/opengraph-image.png',
@@ -39,9 +46,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Universal Media Downloader — YouTube, Facebook & Pinterest',
+    title: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
     description:
-      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, and Pinterest — directly to your device in one tap.',
+      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest — directly to your device in one tap.',
     images: ['/opengraph-image.png'],
   },
   robots: {
@@ -69,19 +76,21 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className="scroll-smooth">
       <body className="flex min-h-screen flex-col">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <Toaster
-          position="bottom-center"
-          toastOptions={{
-            style: {
-              background: '#111827',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: '#e2e8f0',
-            },
-          }}
-        />
+        <I18nProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <Toaster
+            position="bottom-center"
+            toastOptions={{
+              style: {
+                background: '#111827',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#e2e8f0',
+              },
+            }}
+          />
+        </I18nProvider>
       </body>
     </html>
   );
