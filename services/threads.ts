@@ -1,6 +1,7 @@
 import type { MediaFormat, MediaInfo, MediaItem } from '@/lib/types';
 import {
   ExtractionError,
+  extractInlineJson,
   extractJsonLd,
   extractMetaTag,
   fetchHtml,
@@ -8,7 +9,7 @@ import {
   jsonUnescape,
 } from '@/services/http';
 import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
-import { parseCarouselMedia, parseSingleMedia } from '@/services/mediaUtils';
+import { mediaObjectToItem, parseCarouselMedia, parseSingleMedia } from '@/services/mediaUtils';
 
 function canonicalizeThreadsUrl(rawUrl: string): string {
   return rawUrl
@@ -94,10 +95,72 @@ function extractRegexImages(html: string): string[] {
   return images;
 }
 
+function parseThreadsAdditionalData(html: string): MediaItem[] {
+  const items: MediaItem[] = [];
+  let raw: unknown;
+  try {
+    raw = extractInlineJson(html, '__additionalDataLoaded');
+  } catch {
+    return items;
+  }
+  if (raw === null) return items;
+
+  let root: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      root = JSON.parse(raw);
+    } catch {
+      return items;
+    }
+  }
+  if (!root || typeof root !== 'object') return items;
+
+  const posts: unknown[] = [];
+  const collect = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      if (obj.post && typeof obj.post === 'object' && obj.post !== null) {
+        posts.push(obj.post);
+      }
+      Object.values(value).forEach(collect);
+    }
+  };
+  collect(root);
+
+  const seen = new Set<string>();
+  let index = 0;
+  for (const post of posts) {
+    if (typeof post !== 'object' || post === null) continue;
+    const postObj = post as Record<string, unknown>;
+    const carousel = Array.isArray(postObj.carousel_media)
+      ? (postObj.carousel_media as unknown[])
+      : [];
+    const mediaObjects = carousel.length > 0 ? carousel : [post];
+    for (const mediaObject of mediaObjects) {
+      const item = mediaObjectToItem(mediaObject, index);
+      if (!item) continue;
+      const firstUrl = item.formats[0]?.url;
+      if (firstUrl && seen.has(firstUrl)) continue;
+      if (firstUrl) seen.add(firstUrl);
+      items.push(item);
+      index += 1;
+    }
+  }
+
+  return items;
+}
+
 function parseThreadsHtml(html: string): MediaInfo | null {
   if (looksLikeLoginWall(html)) return null;
 
-  let items: MediaItem[] = parseCarouselMedia(html);
+  let items: MediaItem[] = parseThreadsAdditionalData(html);
+  if (items.length === 0) {
+    items = parseCarouselMedia(html);
+  }
   if (items.length === 0) {
     const single = parseSingleMedia(html);
     if (single) items = [single];

@@ -3,11 +3,12 @@ import { ExtractionError } from '@/services/http';
 import { fetchJsonViaProxies } from '@/services/fallbackEngine';
 
 const DEFAULT_INSTANCES = [
+  'https://inv.tux.pizza',
+  'https://invidious.nerdvpn.de',
+  'https://vid.puffyan.us',
   'https://inv.nadeko.net',
   'https://yewtu.be',
-  'https://invidious.nerdvpn.de',
   'https://invidious.f5.si',
-  'https://inv.tux.pizza',
   'https://iv.datura.network',
   'https://invidious.privacyredirect.com',
   'https://invidious.flokinet.to',

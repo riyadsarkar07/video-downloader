@@ -10,6 +10,22 @@ import {
 import { extractWithCobalt, fetchHtmlViaProxies } from '@/services/fallbackEngine';
 import { mediaObjectToItem, parseCarouselMedia, parseSingleMedia } from '@/services/mediaUtils';
 
+const MOBILE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+
+const ACCEPT_HTML =
+  'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8';
+
+interface GraphNode {
+  __typename?: string;
+  video_url?: string;
+  display_url?: string;
+}
+
+interface GraphShortcodeMedia extends GraphNode {
+  edge_sidecar_to_children?: { edges?: Array<{ node?: GraphNode }> };
+}
+
 function looksLikeLoginWall(html: string): boolean {
   return /login_screen|"loginScreen"|log in to continue|login_required/i.test(html);
 }
@@ -108,6 +124,127 @@ function extractRegexImages(html: string): string[] {
   return images;
 }
 
+function extractShortcode(url: string): string | null {
+  const match = url.match(
+    /instagram\.com\/(?:reel|p|tv|reels|stories)\/([A-Za-z0-9_-]+)/i,
+  );
+  return match?.[1] ?? null;
+}
+
+function graphQlMediaItem(node: GraphNode | undefined, index: number): MediaItem | null {
+  if (!node) return null;
+  const isVideo = node.__typename === 'GraphVideo' || Boolean(node.video_url);
+  const imageUrl = node.display_url ? htmlDecode(node.display_url) : null;
+  const videoUrl = node.video_url ? htmlDecode(node.video_url) : null;
+
+  const formats: MediaFormat[] = [];
+  let kind: 'video' | 'image' = 'image';
+  let thumbnail: string | null = imageUrl;
+
+  if (isVideo && videoUrl) {
+    kind = 'video';
+    formats.push({
+      id: `ig-gql-video-${index}`,
+      kind: 'video',
+      label: 'Ultra HD Video',
+      quality: 'HD',
+      ext: 'mp4',
+      url: videoUrl,
+      size: null,
+    });
+    if (imageUrl && imageUrl !== videoUrl) {
+      formats.push({
+        id: `ig-gql-cover-${index}`,
+        kind: 'image',
+        label: 'High-Res Photo',
+        quality: 'Cover',
+        ext: 'jpg',
+        url: imageUrl,
+        size: null,
+      });
+    }
+  } else if (imageUrl) {
+    formats.push({
+      id: `ig-gql-image-${index}`,
+      kind: 'image',
+      label: 'High-Res Photo',
+      quality: 'High-Res',
+      ext: 'jpg',
+      url: imageUrl,
+      size: null,
+    });
+  }
+
+  if (formats.length === 0) return null;
+
+  return {
+    id: `gql-item-${index}`,
+    kind,
+    label: `${index + 1}`,
+    thumbnail,
+    formats,
+  };
+}
+
+async function fetchInstagramGraphQl(shortcode: string): Promise<MediaInfo | null> {
+  const endpoint = `https://www.instagram.com/p/${shortcode}/?__a=1&__d=dis`;
+  for (const ua of [MOBILE_UA, 'instagram-web']) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(endpoint, {
+        headers: {
+          'user-agent': ua,
+          'accept-language': 'en-US,en;q=0.9',
+          accept: 'application/json,text/html,*/*',
+        },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) continue;
+      const json = (await response.json()) as {
+        graphql?: { shortcode_media?: GraphShortcodeMedia };
+      };
+      const media = json?.graphql?.shortcode_media;
+      if (!media) continue;
+
+      const nodes: Array<GraphNode | undefined> = [];
+      if (
+        media.__typename === 'GraphSidecar' &&
+        Array.isArray(media.edge_sidecar_to_children?.edges)
+      ) {
+        media.edge_sidecar_to_children.edges.forEach((edge) => nodes.push(edge.node));
+      } else {
+        nodes.push(media as GraphNode);
+      }
+
+      const items: MediaItem[] = [];
+      nodes.forEach((node, index) => {
+        const item = graphQlMediaItem(node, index);
+        if (item) items.push(item);
+      });
+      if (items.length === 0) continue;
+
+      const thumbnail = items[0].thumbnail ?? null;
+      return {
+        platform: 'instagram',
+        title: 'Instagram Post',
+        thumbnail,
+        duration: null,
+        width: null,
+        height: null,
+        author: null,
+        formats: items.flatMap((item) => item.formats),
+        items,
+      };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 function parseInstagramHtml(html: string): MediaInfo | null {
   if (looksLikeLoginWall(html)) return null;
 
@@ -195,21 +332,24 @@ async function scrapeInstagram(rawUrl: string): Promise<MediaInfo | null> {
   const candidates = buildCandidates(rawUrl);
   let lastInfo: MediaInfo | null = null;
 
-  for (const candidate of candidates) {
-    try {
-      const html = await fetchHtml(candidate, {
-        referer: 'https://www.instagram.com/',
-        accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-      });
-      const parsed = parseInstagramHtml(html);
-      if (parsed) {
-        lastInfo = parsed;
-        if (parsed.items && parsed.items.length > 1) break;
+  for (const ua of [MOBILE_UA, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36']) {
+    for (const candidate of candidates) {
+      try {
+        const html = await fetchHtml(candidate, {
+          referer: 'https://www.instagram.com/',
+          'user-agent': ua,
+          accept: ACCEPT_HTML,
+        });
+        const parsed = parseInstagramHtml(html);
+        if (parsed) {
+          lastInfo = parsed;
+          if (parsed.items && parsed.items.length > 1) return lastInfo;
+        }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
     }
+    if (lastInfo) return lastInfo;
   }
 
   return lastInfo;
@@ -217,9 +357,15 @@ async function scrapeInstagram(rawUrl: string): Promise<MediaInfo | null> {
 
 export async function extractInstagram(rawUrl: string): Promise<MediaInfo> {
   const canonical = canonicalizeInstagramUrl(rawUrl.trim());
+  const shortcode = extractShortcode(rawUrl) ?? extractShortcode(canonical);
 
   const direct = await scrapeInstagram(rawUrl);
   if (direct) return direct;
+
+  if (shortcode) {
+    const graphQl = await fetchInstagramGraphQl(shortcode);
+    if (graphQl) return graphQl;
+  }
 
   const proxiedHtml = await fetchHtmlViaProxies(canonical, {
     referer: 'https://www.instagram.com/',

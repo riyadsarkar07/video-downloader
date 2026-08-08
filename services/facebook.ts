@@ -30,10 +30,12 @@ function canonicalizeFacebookUrl(rawUrl: string): string {
 }
 
 async function resolveShareLink(rawUrl: string): Promise<string | null> {
-  const target = await resolveRedirectTarget(rawUrl);
+  const target = await resolveRedirectTarget(rawUrl, 10000);
   if (!target || target === rawUrl) return null;
   const clean = target.split('#')[0];
-  if (!/facebook\.com\/(?:watch|reel|videos?|photo)/i.test(clean)) return null;
+  if (!/facebook\.com\/(?:watch|reel|videos?|video\.php|photo|story\.php|groups\/)/i.test(clean)) {
+    return null;
+  }
   return clean;
 }
 

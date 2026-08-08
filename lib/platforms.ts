@@ -64,6 +64,10 @@ const TRACKING_PARAMS = [
   'gclid',
   'gclsrc',
   'dclid',
+  'si',
+  'xmt',
+  'slof',
+  'pp',
   'utm_source',
   'utm_medium',
   'utm_campaign',
@@ -95,15 +99,44 @@ export function stripTrackingParams(input: string): string {
   }
 }
 
+export function canonicalizeUrl(input: string): string {
+  try {
+    const url = new URL(input);
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
+
+    if (host === 'threads.com') {
+      url.hostname = 'www.threads.net';
+    }
+
+    if (host === 'youtu.be') {
+      const id = (url.pathname.replace(/^\//, '').split('/')[0] ?? '').match(/^([A-Za-z0-9_-]{11})/);
+      if (id) return `https://www.youtube.com/watch?v=${id[1]}`;
+    }
+
+    if (host === 'm.youtube.com') {
+      url.hostname = 'www.youtube.com';
+    }
+
+    if (host === 'm.threads.net') {
+      url.hostname = 'www.threads.net';
+    }
+
+    return url.toString();
+  } catch {
+    return input;
+  }
+}
+
 export function cleanInputUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  return stripTrackingParams(withScheme);
+  const stripped = stripTrackingParams(withScheme);
+  return canonicalizeUrl(stripped);
 }
 
 export function detectPlatform(url: string): Platform | null {
-  const normalized = stripTrackingParams(url.trim());
+  const normalized = cleanInputUrl(url);
   if (!normalized) return null;
   for (const platform of Object.keys(PATTERN_MAP) as Platform[]) {
     if (PATTERN_MAP[platform].some((pattern) => pattern.test(normalized))) {
