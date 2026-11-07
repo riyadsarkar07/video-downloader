@@ -1,73 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ClipboardPaste, Link2, Loader2, X, Zap } from 'lucide-react';
-import { detectPlatform, PLATFORM_META, PLATFORM_ORDER } from '@/lib/platforms';
+import { ClipboardPaste, Link2, Loader2, X, Search } from 'lucide-react';
+import { cleanInputUrl, detectPlatform, PLATFORM_META, PLATFORM_ORDER } from '@/lib/platforms';
 import { clsx } from '@/lib/utils';
-import { useI18n } from '@/lib/i18n';
 import type { MediaInfo, Platform } from '@/lib/types';
 import { PlatformIcon } from '@/components/icons';
 import { MediaPreview } from '@/components/MediaPreview';
-import { ConfettiBurst } from '@/components/ConfettiBurst';
-
-type DetectionState = 'idle' | 'active' | 'busy' | 'complete' | 'error';
-
-const DETECTION_PULSE: Record<DetectionState, string> = {
-  idle: 'text-slate-500',
-  active: 'text-accent',
-  busy: 'text-slate-500',
-  complete: 'text-emerald-400',
-  error: 'text-rose-400',
-};
 
 export function Downloader() {
-  const { t } = useI18n();
   const [url, setUrl] = useState('');
   const [detected, setDetected] = useState<Platform | null>(null);
-  const [state, setState] = useState<DetectionState>('idle');
   const [info, setInfo] = useState<MediaInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasting, setPasting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [showConfetti, setShowConfetti] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const platform = detectPlatform(url);
-    setDetected(platform);
-    if (url.trim() && !platform) {
-      setState('idle');
-    }
+    setDetected(detectPlatform(url));
   }, [url]);
 
   useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-      if (progressTimer.current) clearInterval(progressTimer.current);
-    };
-  }, []);
-
-  const startProgress = useCallback(() => {
-    setProgress(10);
-    if (progressTimer.current) clearInterval(progressTimer.current);
-    progressTimer.current = setInterval(() => {
-      setProgress((current) => {
-        if (current >= 90) return current;
-        return Math.min(90, current + Math.floor(Math.random() * 9) + 3);
-      });
-    }, 180);
-  }, []);
-
-  const stopProgress = useCallback(() => {
-    if (progressTimer.current) {
-      clearInterval(progressTimer.current);
-      progressTimer.current = null;
-    }
-    setProgress(100);
+    return () => abortRef.current?.abort();
   }, []);
 
   const handlePaste = useCallback(async () => {
@@ -77,53 +33,56 @@ export function Downloader() {
         const text = await navigator.clipboard.readText();
         if (text) {
           setUrl(text.trim());
-          toast.success(t('linkPasted'));
+          toast.success('Link pasted');
         } else {
-          toast.error(t('clipboardEmpty'));
+          toast.error('Clipboard is empty');
         }
       } else {
-        toast.error(t('clipboardBlocked'));
+        toast.error('Clipboard access is blocked');
       }
     } catch {
-      toast.error(t('clipboardManual'));
+      toast.error('Paste the URL manually');
     } finally {
       setPasting(false);
     }
-  }, [t]);
+  }, []);
 
   const handleClear = useCallback(() => {
     abortRef.current?.abort();
-    if (progressTimer.current) {
-      clearInterval(progressTimer.current);
-      progressTimer.current = null;
-    }
     setUrl('');
     setDetected(null);
     setInfo(null);
     setError(null);
-    setProgress(0);
-    setState('idle');
   }, []);
 
   const handleExtract = useCallback(async () => {
-    const trimmed = url.trim();
+    const trimmed = cleanInputUrl(url) || url.trim();
     if (!trimmed) {
-      toast.error(t('pasteLinkFirst'));
+      toast.error('Please paste a link first');
       return;
     }
-    if (!detected) {
-      toast.error(t('linkNotSupported'));
+
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      setError('That does not look like a valid URL.');
+      toast.error('That does not look like a valid URL.');
       return;
     }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      setError('Only http and https links are supported.');
+      toast.error('Only http and https links are supported.');
+      return;
+    }
+    setUrl(trimmed);
 
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     setLoading(true);
     setError(null);
-    setState('busy');
-    startProgress();
+    setInfo(null);
 
     try {
       const response = await fetch('/api/extract', {
@@ -133,41 +92,30 @@ export function Downloader() {
         signal: controller.signal,
       });
       const payload = await response.json();
-
       if (!response.ok || !payload.success) {
-        stopProgress();
-        setState('error');
-        setError(payload.error ?? t('genericError'));
-        toast.error(payload.error ?? t('extractionFailed'));
+        const message = payload.error ?? 'Could not fetch this video';
+        setError(message);
+        toast.error(payload.code === 'BOT_CHECK' ? 'Source blocked this server' : message);
         return;
       }
-
-      stopProgress();
       setInfo(payload.data);
-      setState('complete');
-      setShowConfetti(true);
-      window.setTimeout(() => setShowConfetti(false), 2200);
-      toast.success(t('mediaReady'));
+      toast.success('Video ready — choose a format');
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') return;
-      stopProgress();
-      setState('error');
-      setError(t('networkError'));
-      toast.error(t('serverUnreachable'));
+      setError('Could not reach the download server');
+      toast.error('Could not reach the download server');
     } finally {
       setLoading(false);
     }
-  }, [url, detected, t, startProgress, stopProgress]);
+  }, [url]);
 
   return (
     <section className="relative z-10 mx-auto w-full max-w-3xl px-4 sm:px-6">
-      <div className="glass-card glow-card relative overflow-visible p-3 sm:p-5">
-        <AnimatePresence>{showConfetti && <ConfettiBurst />}</AnimatePresence>
-
-        <div className="flex items-stretch gap-2">
+      <div className="rounded-2xl border border-line bg-card p-3 shadow-soft sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
           <div className="relative flex-1">
             <Link2
-              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
               aria-hidden="true"
             />
             <input
@@ -176,97 +124,49 @@ export function Downloader() {
               autoComplete="off"
               spellCheck={false}
               value={url}
-              onChange={(event) => {
-                setUrl(event.target.value);
-                setState('idle');
-              }}
+              onChange={(event) => setUrl(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
                   void handleExtract();
                 }
               }}
-              placeholder={t('inputPlaceholder')}
-              className="input-base pl-10 pr-20 md:pr-24"
-              aria-label="Media link"
+              placeholder="Paste a public video URL (YouTube, TikTok, Facebook, Instagram, X, Reddit, Vimeo, or a direct MP4)…"
+              className="input-base pl-10 pr-12"
+              aria-label="Video URL"
             />
-            <AnimatePresence>
-              {url && (
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  onClick={handleClear}
-                  className="absolute right-12 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center p-1.5 hover:bg-slate-800/80 rounded-full text-slate-400 hover:text-white transition md:right-16"
-                  aria-label={t('clearInput')}
-                  title={t('clearInput')}
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {url ? (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:bg-line hover:text-ink"
+                aria-label="Clear input"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
-
-          <button
-            type="button"
-            onClick={handlePaste}
-            disabled={pasting}
-            className="btn-ghost shrink-0 px-3 sm:px-4"
-            aria-label={t('pasteFromClipboard')}
-            title={t('pasteFromClipboard')}
-          >
-            {pasting ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <ClipboardPaste className="h-4 w-4" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">{t('paste')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExtract}
-            disabled={loading || !url.trim()}
-            className="btn-primary shrink-0"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Zap className="h-4 w-4" aria-hidden="true" />
-            )}
-            <span className="hidden sm:inline">{loading ? t('extracting') : t('extract')}</span>
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={handlePaste} disabled={pasting} className="btn-ghost flex-1 px-3 sm:flex-none sm:px-4">
+              {pasting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
+              <span>Paste</span>
+            </button>
+            <button type="button" onClick={handleExtract} disabled={loading || !url.trim()} className="btn-primary flex-1 sm:flex-none">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              <span>{loading ? 'Fetching…' : 'Fetch video'}</span>
+            </button>
+          </div>
         </div>
 
-        <AnimatePresence>
-          {loading && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-4 flex items-center gap-3">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-300" aria-hidden="true" />
-                </span>
-                <div className="flex-1">
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-                <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-400">
-                  {Math.round(progress)}%
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {loading ? (
+          <div className="mt-4 flex items-center gap-3 px-1">
+            <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
+            <p className="text-sm text-muted">Reading video metadata from the source…</p>
+          </div>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
-            {t('detectedPlatform')}
-          </span>
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted">Detected</span>
           {PLATFORM_ORDER.map((platform) => {
             const meta = PLATFORM_META[platform];
             const isDetected = detected === platform;
@@ -274,46 +174,25 @@ export function Downloader() {
               <span
                 key={platform}
                 className={clsx(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-300',
-                  isDetected
-                    ? `border-white/20 bg-white/10 text-white shadow-glow ${meta.ring}`
-                    : 'border-white/5 bg-white/[0.03] text-slate-500',
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+                  isDetected ? 'border-brand-400/40 bg-brand-500/10 text-ink' : 'border-line bg-transparent text-muted',
                 )}
               >
                 <PlatformIcon platform={platform} className="h-3.5 w-3.5" />
                 {meta.label}
-                <span
-                  className={clsx(
-                    'h-1.5 w-1.5 rounded-full transition-colors',
-                    isDetected ? DETECTION_PULSE.active : DETECTION_PULSE.idle,
-                  )}
-                  aria-hidden="true"
-                />
               </span>
             );
           })}
         </div>
 
-        <AnimatePresence>
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-4 overflow-hidden"
-            >
-              <div className="flex items-start gap-2.5 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-rose-400" aria-hidden="true" />
-                <p>{error}</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {error ? (
+          <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-500">
+            {error}
+          </div>
+        ) : null}
       </div>
 
-      <AnimatePresence mode="wait">
-        {info && <MediaPreview key="preview" info={info} />}
-      </AnimatePresence>
+      {info ? <MediaPreview info={info} sourceUrl={url} /> : null}
     </section>
   );
 }

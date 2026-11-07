@@ -4,41 +4,46 @@ export type Platform =
   | 'instagram'
   | 'tiktok'
   | 'twitter'
-  | 'threads'
-  | 'pinterest';
+  | 'reddit'
+  | 'vimeo'
+  | 'generic';
 
-export type MediaKind = 'video' | 'audio' | 'image';
+export type MediaKind = 'video' | 'audio';
 
 export interface MediaFormat {
   id: string;
   kind: MediaKind;
   label: string;
   quality: string;
-  ext: 'mp4' | 'mp3' | 'jpg' | 'webm' | 'm4a' | 'png' | 'webp' | 'gif';
-  url: string;
-  size: number | null;
-  width?: number;
-  height?: number;
-}
-
-export interface MediaItem {
-  id: string;
-  kind: 'video' | 'image';
-  label: string;
-  thumbnail: string | null;
-  formats: MediaFormat[];
+  ext: 'mp4' | 'mp3' | 'webm' | 'm4a';
+  filesize: number | null;
 }
 
 export interface MediaInfo {
-  platform: Platform;
+  platform: Platform | string;
+  extractor?: string;
+  id?: string;
   title: string;
+  filenameBase?: string;
   thumbnail: string | null;
   duration: number | null;
   width: number | null;
   height: number | null;
   author: string | null;
+  webpageUrl?: string | null;
   formats: MediaFormat[];
-  items?: MediaItem[];
+}
+
+export interface DownloadJob {
+  id: string;
+  status: 'queued' | 'processing' | 'ready' | 'failed' | 'expired';
+  progress: number;
+  stage: string;
+  error: string | null;
+  filename: string | null;
+  ext: string | null;
+  filesize: number | null;
+  title: string | null;
 }
 
 export interface ExtractSuccessResponse {

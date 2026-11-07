@@ -1,78 +1,66 @@
 'use client';
 
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { clsx } from '@/lib/utils';
-import { useI18n } from '@/lib/i18n';
+
+const FAQS = [
+  {
+    question: 'Is this a real downloader?',
+    answer:
+      'Yes. Metadata and files are processed on a dedicated backend with yt-dlp and FFmpeg. Progress comes from the actual job, not a fake timer.',
+  },
+  {
+    question: 'Why not host downloads on Vercel?',
+    answer:
+      'Vercel serverless functions have short timeouts and no persistent disk. Video processing needs a long-running Node.js server, which is why the backend is separate.',
+  },
+  {
+    question: 'Which formats can I download?',
+    answer:
+      'MP4 video at the best available quality plus 1080p, 720p, 480p, and 360p when the source provides them. Audio is exported as MP3 when the source has an audio track.',
+  },
+  {
+    question: 'Why do some videos fail?',
+    answer:
+      'Private, age-gated, geo-blocked, DRM-protected, or login-required videos cannot be downloaded. YouTube may also block datacenter IPs with a bot check. That is reported honestly and is not bypassed.',
+  },
+  {
+    question: 'Do you store my videos?',
+    answer:
+      'Temporary files live on the server only while the job is active, then they are deleted automatically. We do not keep a media library.',
+  },
+  {
+    question: 'Can I download copyrighted content?',
+    answer:
+      'Only download media you own or have permission to save. This tool is for personal backups of public content you are allowed to keep.',
+  },
+];
 
 export function Faq() {
-  const { t } = useI18n();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
-
-  const FAQS: Array<{ question: string; answer: string }> = [
-    { question: t('faq1q'), answer: t('faq1a') },
-    { question: t('faq2q'), answer: t('faq2a') },
-    { question: t('faq3q'), answer: t('faq3a') },
-    { question: t('faq4q'), answer: t('faq4a') },
-    { question: t('faq5q'), answer: t('faq5a') },
-    { question: t('faq6q'), answer: t('faq6a') },
-  ];
 
   return (
     <section id="faq" className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="text-center">
-        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-300">
-          {t('faqBadge')}
-        </span>
-        <h2 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          {t('faqTitle')}
-        </h2>
+        <span className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">FAQ</span>
+        <h2 className="mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Frequently asked questions</h2>
       </div>
-
       <div className="mt-10 space-y-3">
         {FAQS.map((faq, index) => {
           const isOpen = openIndex === index;
           return (
-            <div
-              key={faq.question}
-              className={clsx(
-                'glass-card overflow-hidden transition-colors',
-                isOpen && 'border-white/20',
-              )}
-            >
+            <div key={faq.question} className={clsx('overflow-hidden rounded-2xl border border-line bg-card', isOpen && 'border-brand-400/30')}>
               <button
                 type="button"
                 onClick={() => setOpenIndex(isOpen ? null : index)}
                 className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
                 aria-expanded={isOpen}
               >
-                <span className="text-sm font-semibold text-white sm:text-base">
-                  {faq.question}
-                </span>
-                <ChevronDown
-                  className={clsx(
-                    'h-4 w-4 shrink-0 text-slate-400 transition-transform duration-300',
-                    isOpen && 'rotate-180 text-brand-300',
-                  )}
-                  aria-hidden="true"
-                />
+                <span className="text-sm font-semibold text-ink sm:text-base">{faq.question}</span>
+                <ChevronDown className={clsx('h-4 w-4 shrink-0 text-muted transition-transform', isOpen && 'rotate-180 text-brand-500')} />
               </button>
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <p className="px-5 pb-5 text-sm leading-relaxed text-slate-400">
-                      {faq.answer}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {isOpen ? <p className="px-5 pb-5 text-sm leading-relaxed text-muted">{faq.answer}</p> : null}
             </div>
           );
         })}

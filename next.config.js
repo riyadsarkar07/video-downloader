@@ -1,18 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    serverComponentsExternalPackages: ['@distube/ytdl-core'],
-  },
-  async headers() {
+  allowedDevOrigins: ['*.monkeycode-ai.live', 'monkeycode-ai.live'],
+  async rewrites() {
+    const backend = process.env.BACKEND_URL || 'http://127.0.0.1:3001';
     return [
       {
         source: '/api/:path*',
-        headers: [
-          { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'Content-Type' },
-        ],
+        destination: `${backend}/api/:path*`,
       },
     ];
   },

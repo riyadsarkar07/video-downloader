@@ -3,67 +3,19 @@ import { Toaster } from 'sonner';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { I18nProvider } from '@/lib/i18n';
+import { ThemeProvider } from '@/lib/theme';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://unidownloader.vercel.app'),
+  metadataBase: new URL('https://video-downloader-peach-xi.vercel.app'),
   title: {
-    default: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
-    template: '%s · Universal Media Downloader',
+    default: 'UniDown — Real Video Downloader',
+    template: '%s · UniDown',
   },
   description:
-    'Download videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest for free. No API keys, no sign-ups, direct save-file downloads on mobile and desktop.',
-  keywords: [
-    'video downloader',
-    'youtube downloader',
-    'facebook downloader',
-    'instagram downloader',
-    'tiktok downloader',
-    'twitter downloader',
-    'x video downloader',
-    'threads downloader',
-    'pinterest downloader',
-    'mp3 downloader',
-    'hd video download',
-    'no watermark tiktok',
-  ],
-  openGraph: {
-    type: 'website',
-    url: 'https://unidownloader.vercel.app',
-    siteName: 'Universal Media Downloader',
-    title: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
-    description:
-      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest — directly to your device in one tap.',
-    images: [
-      {
-        url: '/opengraph-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Universal Media Downloader',
-      },
-    ],
-    locale: 'en_US',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Universal Media Downloader — YouTube, Facebook, Instagram, TikTok, X, Threads & Pinterest',
-    description:
-      'Save videos, MP3 audio, and high-resolution images from YouTube, Facebook, Instagram, TikTok, X / Twitter, Threads, and Pinterest — directly to your device in one tap.',
-    images: ['/opengraph-image.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true },
-  },
+    'Download public videos as MP4 or MP3 with real server-side processing. Direct media URLs, public Facebook, and public TikTok were verified. Other sites work only when the source allows anonymous access.',
+  robots: { index: true, follow: true },
   manifest: '/manifest.webmanifest',
-  icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/favicon.ico', sizes: 'any' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180' }],
-  },
 };
 
 export const viewport: Viewport = {
@@ -74,23 +26,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className="dark scroll-smooth">
       <body className="flex min-h-screen flex-col">
-        <I18nProvider>
-          <Header />
-          <main className="flex-1">{children}</main>
-          <Footer />
-          <Toaster
-            position="bottom-center"
-            toastOptions={{
-              style: {
-                background: '#111827',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#e2e8f0',
-              },
-            }}
-          />
-        </I18nProvider>
+        <ThemeProvider>
+          <I18nProvider>
+            <Header />
+            <main className="flex-1">{children}</main>
+            <Footer />
+            <Toaster position="bottom-center" />
+          </I18nProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

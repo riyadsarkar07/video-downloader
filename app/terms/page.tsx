@@ -3,7 +3,7 @@ import { InfoPage } from '@/components/InfoPage';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: 'Terms of Service for the Universal Media Downloader.',
+  description: 'Terms of Service for UniDown.',
 };
 
 export default function TermsPage() {
@@ -11,23 +11,23 @@ export default function TermsPage() {
     <InfoPage
       eyebrow="Legal"
       title="Terms of Service"
-      intro="By using Universal Media Downloader you agree to the following terms."
+      intro="By using UniDown you agree to use it only for lawful, authorized downloads of public media."
       sections={[
         {
           heading: 'Acceptable use',
-          body: 'You agree to use this service only to download content that you own, have permission to download, or that is otherwise lawful to download in your jurisdiction. Respect the intellectual property rights of creators.',
+          body: 'Only download content you own, have permission to save, or that is otherwise lawful to download in your jurisdiction. Respect copyright and platform terms.',
+        },
+        {
+          heading: 'No bypassing restrictions',
+          body: 'The service does not bypass DRM, paywalls, private accounts, age gates, or authentication. Requests for restricted media will fail.',
         },
         {
           heading: 'No warranty',
-          body: 'The service is provided “as is” without warranties of any kind. We do not guarantee that extraction will always succeed, as content availability depends entirely on the source platforms.',
+          body: 'Extraction depends on public source availability. Platforms change their APIs, and some videos will not be downloadable.',
         },
         {
-          heading: 'Limitation of liability',
-          body: 'We are not liable for any damages arising from your use of the service, including any misuse of downloaded content. You are solely responsible for how you use downloaded files.',
-        },
-        {
-          heading: 'Changes',
-          body: 'We may update these terms at any time. Continued use of the service after changes are posted constitutes acceptance of the revised terms.',
+          heading: 'Liability',
+          body: 'You are responsible for how you use downloaded files. UniDown is provided as-is for personal, lawful use.',
         },
       ]}
     />

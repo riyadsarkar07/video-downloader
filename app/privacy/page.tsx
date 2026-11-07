@@ -3,7 +3,7 @@ import { InfoPage } from '@/components/InfoPage';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How Universal Media Downloader handles your data. We store nothing, period.',
+  description: 'How UniDown handles URLs and temporary download files.',
 };
 
 export default function PrivacyPage() {
@@ -11,23 +11,23 @@ export default function PrivacyPage() {
     <InfoPage
       eyebrow="Privacy"
       title="Privacy Policy"
-      intro="We built this tool with a single privacy principle: we store nothing."
+      intro="UniDown processes public video URLs long enough to extract metadata and prepare a file. It is not a media library."
       sections={[
         {
-          heading: 'Data collection',
-          body: 'Universal Media Downloader does not require accounts, does not use cookies for tracking, and does not persist any of the links you submit. Every extraction request is processed in memory and discarded as soon as it completes.',
+          heading: 'What we process',
+          body: 'The URL you submit is sent to the download server so yt-dlp can read public metadata and fetch the selected stream. We do not require accounts.',
         },
         {
-          heading: 'Server logs',
-          body: 'Like any hosted service, our hosting provider (Vercel) may retain ephemeral request logs for operational and security purposes. These logs contain no meaningful content beyond technical metadata and are never sold or shared.',
+          heading: 'Temporary files',
+          body: 'Processed files are stored on disk only while the download job is active. They are deleted automatically after a short TTL or shortly after you save the file.',
         },
         {
-          heading: 'Third parties',
-          body: 'We do not embed third-party advertising, analytics trackers, or affiliate scripts. When you download a file, our server fetches it from the content platform and streams it directly to your device — no intermediaries receive the file.',
+          heading: 'Logs',
+          body: 'The server may keep short operational logs such as platform name, status, and timing. We do not build a catalog of the videos you download.',
         },
         {
-          heading: 'Your rights',
-          body: 'You may stop using the service at any time. Because we store nothing, there is nothing to delete. For any privacy questions, reach out via our contact page.',
+          heading: 'Cookies',
+          body: 'Optional yt-dlp cookies are an operator-provided file for sites that block anonymous access. That file stays on the server and is never exposed to the browser.',
         },
       ]}
     />

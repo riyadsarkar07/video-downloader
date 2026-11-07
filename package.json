@@ -1,24 +1,23 @@
 {
   "name": "universal-media-downloader",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "A production-ready, zero-API-key universal media downloader for YouTube, Facebook and Pinterest.",
+  "description": "A real video downloader with a Next.js frontend and a yt-dlp Node.js backend.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "backend": "npm --prefix backend start",
+    "backend:dev": "npm --prefix backend run dev"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
-    "framer-motion": "^11.18.2",
     "lucide-react": "^0.475.0",
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "sonner": "^1.7.4",
-    "tough-cookie": "^4.1.4"
+    "sonner": "^1.7.4"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

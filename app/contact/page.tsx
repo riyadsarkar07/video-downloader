@@ -3,27 +3,23 @@ import { InfoPage } from '@/components/InfoPage';
 
 export const metadata: Metadata = {
   title: 'Contact',
-  description: 'Get in touch with the Universal Media Downloader team.',
+  description: 'Get in touch about UniDown.',
 };
 
 export default function ContactPage() {
   return (
     <InfoPage
       eyebrow="Contact"
-      title="Contact us"
-      intro="Found a bug or want to suggest a feature? We would love to hear from you."
+      title="Contact"
+      intro="If a public link fails, include the platform and a description of the page type. Do not send private or login-only URLs that you are not allowed to access."
       sections={[
         {
-          heading: 'Report a broken link',
-          body: 'Platforms constantly change their page structures. If a link fails to extract, share the platform and the type of content (video, reel, pin) so we can reproduce and fix it quickly.',
+          heading: 'Broken public links',
+          body: 'Platforms change often. Share the site name and whether the page is a standard video, Short, Reel, or similar public post.',
         },
         {
-          heading: 'Get in touch',
-          body: 'Open an issue on our GitHub repository with a clear description of the problem. For general inquiries, you can reach the maintainers through the repository discussions board.',
-        },
-        {
-          heading: 'Response time',
-          body: 'We aim to respond to all reports within 48 hours. Your feedback helps keep the downloader fast and reliable for everyone.',
+          heading: 'Self-hosting',
+          body: 'For deployment issues, check README.md. The frontend can stay on Vercel, but downloads must run on a server that has yt-dlp and FFmpeg.',
         },
       ]}
     />
