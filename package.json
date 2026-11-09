@@ -10,7 +10,12 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "backend": "npm --prefix backend start",
-    "backend:dev": "npm --prefix backend run dev"
+    "backend:dev": "npm --prefix backend run dev",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "node --test test/frontend.test.mjs test/proxy.test.mjs",
+    "test:backend": "npm --prefix backend test",
+    "test:integration": "node --test test/integration.test.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "lucide-react": "^0.475.0",
@@ -24,6 +29,8 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"

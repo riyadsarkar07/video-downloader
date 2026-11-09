@@ -1,0 +1,38 @@
+# Caddy reverse proxy for the downloader API.
+# Replace API_DOMAIN with your real hostname before deploying.
+# Caddy provisions and renews Let's Encrypt certificates automatically.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+
+	# Long-lived responses: file streaming and slow downloads must not be cut off.
+	reverse_proxy api:3001 {
+		flush_interval -1
+		transport http {
+			read_timeout 0
+			write_timeout 0
+			dial_timeout 10s
+		}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Do not let proxies or browsers cache download responses.
+	@downloads path /api/jobs/*/file
+	header @downloads Cache-Control "no-store"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

@@ -59,12 +59,32 @@ export function detectPlatform(hostname) {
   return 'generic';
 }
 
-function ipv4FromHexGroups(groups) {
-  if (groups.length < 2) return null;
-  const hi = Number.parseInt(groups[0], 16);
-  const lo = Number.parseInt(groups[1], 16);
-  if (Number.isNaN(hi) || Number.isNaN(lo)) return null;
-  return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+function ipv4FromHexGroups(hi, lo) {
+  const a = Number.parseInt(hi, 16);
+  const b = Number.parseInt(lo, 16);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return `${(a >> 8) & 255}.${a & 255}.${(b >> 8) & 255}.${b & 255}`;
+}
+
+function expandIpv6(address) {
+  let value = address;
+  const lastColon = value.lastIndexOf(':');
+  const tail = value.slice(lastColon + 1);
+  if (tail.includes('.')) {
+    const v4 = tail.split('.').map(Number);
+    if (v4.length !== 4 || v4.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+    value = `${value.slice(0, lastColon)}:${((v4[0] << 8) | v4[1]).toString(16)}:${((v4[2] << 8) | v4[3]).toString(16)}`;
+  }
+  const [head, rest] = value.includes('::') ? value.split('::') : [value, null];
+  const headGroups = head ? head.split(':') : [];
+  const restGroups = rest ? rest.split(':') : [];
+  const groups = rest === null
+    ? headGroups
+    : [...headGroups, ...Array(8 - headGroups.length - restGroups.length).fill('0'), ...restGroups];
+  if (groups.length !== 8) return null;
+  const parsed = groups.map((group) => Number.parseInt(group || '0', 16));
+  if (parsed.some((n) => Number.isNaN(n))) return null;
+  return parsed;
 }
 
 export function isPrivateIp(ip) {
@@ -73,18 +93,30 @@ export function isPrivateIp(ip) {
   if (ip.includes(':')) {
     const lower = ip.toLowerCase().replace(/^\[|\]$/g, '');
     if (lower === '::1' || lower === '::') return true;
-    if (lower.startsWith('::ffff:')) return isPrivateIp(lower.slice(7));
     if (lower.startsWith('fe80:') || lower.startsWith('ff')) return true;
     if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
     if (lower.startsWith('2001:db8:')) return true;
     if (lower.startsWith('fd00:ec2:')) return true;
-    if (lower.startsWith('2002:')) {
-      const embedded = ipv4FromHexGroups(lower.split(':').slice(1, 3));
+
+    const groups = expandIpv6(lower);
+    if (!groups) return false;
+
+    const low32 = () => ipv4FromHexGroups(groups[6].toString(16), groups[7].toString(16));
+    const prefixIs = (values, start = 0) =>
+      values.every((value, index) => groups[start + index] === value);
+
+    const isIpv4Mapped = prefixIs([0, 0, 0, 0, 0, 0xffff]);
+    const isIpv4Compatible = prefixIs([0, 0, 0, 0, 0, 0]) && (groups[6] !== 0 || groups[7] !== 0);
+    const isNat64 = prefixIs([0x64, 0xff9b, 0, 0, 0, 0]);
+    const isSixToFour = groups[0] === 0x2002;
+
+    if (isIpv4Mapped || isIpv4Compatible || isNat64) {
+      const embedded = low32();
       if (embedded && isPrivateIp(embedded)) return true;
     }
-    if (lower.startsWith('64:ff9b:')) {
-      const dotted = lower.split(':').pop();
-      if (dotted && dotted.includes('.') && isPrivateIp(dotted)) return true;
+    if (isSixToFour) {
+      const embedded = ipv4FromHexGroups(groups[1].toString(16), groups[2].toString(16));
+      if (embedded && isPrivateIp(embedded)) return true;
     }
     return false;
   }
@@ -156,7 +188,7 @@ export function parsePublicUrl(raw) {
   return parsed;
 }
 
-export async function assertPublicHost(parsed) {
+export async function assertPublicHost(parsed, { lookupFn = lookup } = {}) {
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '');
   if (net.isIP(hostname)) {
     if (isPrivateIp(hostname)) {
@@ -167,7 +199,7 @@ export async function assertPublicHost(parsed) {
 
   let records;
   try {
-    records = await lookup(hostname, { all: true, verbatim: true });
+    records = await lookupFn(hostname, { all: true, verbatim: true });
   } catch {
     throw new SecurityError('Could not resolve this hostname.', 'DNS_FAILED');
   }

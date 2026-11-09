@@ -1,0 +1,86 @@
+# Production stack for the video downloader backend.
+#   docker compose --env-file .env up -d --build
+#
+# The API is never published to the host: only Caddy is reachable (80/443),
+# and it proxies to the API over the private compose network.
+
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: video-downloader-api:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DOWNLOAD_TMP_DIR: /tmp/unidown
+      # Writable home for tool caches while the root filesystem is read-only.
+      HOME: /tmp
+      # Exactly one proxy hop in front of the API (Caddy).
+      TRUST_PROXY: '1'
+    volumes:
+      - unidown-tmp:/tmp/unidown
+      # Optional: mount an operator-provided Netscape cookies file read-only.
+      # - ./secrets/cookies.txt:/run/secrets/cookies.txt:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Resource guards: tune to the VPS. yt-dlp + ffmpeg are the heavy part.
+    mem_limit: 2g
+    cpus: '2.0'
+    pids_limit: 512
+    stop_grace_period: 30s
+    expose:
+      - '3001'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    env_file:
+      - .env
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  unidown-tmp:
+  caddy-data:
+  caddy-config:

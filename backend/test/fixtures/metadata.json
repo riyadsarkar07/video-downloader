@@ -1,0 +1,30 @@
+{
+  "_type": "video",
+  "id": "fake-123",
+  "title": "Fake Sample Video",
+  "uploader": "Fixture Channel",
+  "duration": 5,
+  "width": 1280,
+  "height": 720,
+  "ext": "mp4",
+  "webpage_url": "https://example.com/watch?v=fake-123",
+  "thumbnail": "https://example.com/thumb.jpg",
+  "formats": [
+    {
+      "format_id": "137",
+      "ext": "mp4",
+      "vcodec": "avc1.640028",
+      "acodec": "none",
+      "height": 720,
+      "width": 1280,
+      "filesize": 1200000
+    },
+    {
+      "format_id": "140",
+      "ext": "m4a",
+      "vcodec": "none",
+      "acodec": "mp4a.40.2",
+      "filesize": 90000
+    }
+  ]
+}

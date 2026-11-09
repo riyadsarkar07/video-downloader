@@ -26,6 +26,10 @@ export const CORS_ORIGINS = String(process.env.CORS_ORIGINS || '')
   .map((value) => value.trim())
   .filter(Boolean);
 
+export const EXTRACT_RATE_LIMIT = Number(process.env.EXTRACT_RATE_LIMIT || 20);
+export const DOWNLOAD_RATE_LIMIT = Number(process.env.DOWNLOAD_RATE_LIMIT || 8);
+export const FILE_RATE_LIMIT = Number(process.env.FILE_RATE_LIMIT || 60);
+
 mkdirSync(TMP_DIR, { recursive: true });
 
 export const FORMAT_PRESETS = {

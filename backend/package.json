@@ -6,7 +6,10 @@
   "description": "yt-dlp backed video downloader API",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js",
+    "test:unit": "node --test test/security.test.js test/jobs.test.js test/api.test.js",
+    "test:integration": "node --test test/integration.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

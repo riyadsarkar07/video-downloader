@@ -14,6 +14,7 @@ import {
   User,
 } from 'lucide-react';
 import { PLATFORM_META } from '@/lib/platforms';
+import { canCancel, isTerminal, jobTransition, progressPercent } from '@/lib/jobProgress';
 import { clsx, formatBytes, formatDuration, sanitizeFilename } from '@/lib/utils';
 import type { DownloadJob, MediaFormat, MediaInfo } from '@/lib/types';
 import { PlatformIcon } from '@/components/icons';
@@ -40,23 +41,24 @@ export function MediaPreview({ info, sourceUrl }: MediaPreviewProps) {
   const platform = (info.platform in PLATFORM_META ? info.platform : 'generic') as keyof typeof PLATFORM_META;
   const meta = PLATFORM_META[platform];
   const selected = info.formats.find((format) => format.id === selectedId) ?? info.formats[0];
+  const jobId = job?.id;
+  const jobStatus = job?.status;
 
   useEffect(() => {
-    if (!job || job.status === 'ready' || job.status === 'failed') return undefined;
-    const id = job.id;
+    if (!jobId || !jobStatus || isTerminal(jobStatus)) return undefined;
     const timer = window.setInterval(async () => {
       try {
-        const response = await fetch(`/api/jobs/${id}`);
+        const response = await fetch(`/api/jobs/${jobId}`);
         const payload = await response.json();
         if (payload.success && payload.job) {
           const next: DownloadJob = payload.job;
+          const transition = jobTransition(jobStatus, next);
           setJob(next);
-          if (next.status === 'failed') {
+          if (transition.clearBusy) setBusy(false);
+          if (transition.notice === 'failed') {
             toast.error(next.error || 'Download failed');
-            setBusy(false);
           }
-          if (next.status === 'ready') {
-            setBusy(false);
+          if (transition.notice === 'ready') {
             toast.success('Your file is ready');
           }
         }
@@ -65,7 +67,7 @@ export function MediaPreview({ info, sourceUrl }: MediaPreviewProps) {
       }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [job?.id, job?.status]);
+  }, [jobId, jobStatus]);
 
   const startDownload = async () => {
     if (!selected) return;
@@ -100,6 +102,9 @@ export function MediaPreview({ info, sourceUrl }: MediaPreviewProps) {
       <div className="grid gap-0 md:grid-cols-[minmax(0,340px)_1fr]">
         <div className="relative aspect-video bg-line md:aspect-auto md:min-h-[240px]">
           {info.thumbnail ? (
+            // Thumbnails come from arbitrary third-party hosts at runtime, so a
+            // static next/image domain allowlist is not possible here.
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={info.thumbnail}
               alt={info.title}
@@ -252,7 +257,8 @@ function FormatButton({
 function JobStatus({ job, onCancel }: { job: DownloadJob; onCancel: () => void }) {
   const ready = job.status === 'ready';
   const failed = job.status === 'failed';
-  const live = job.status === 'queued' || job.status === 'processing';
+  const live = canCancel(job);
+  const percent = progressPercent(job);
   return (
     <div className="mt-5 rounded-xl border border-line bg-surface p-4">
       <div className="flex items-center justify-between gap-3">
@@ -260,7 +266,7 @@ function JobStatus({ job, onCancel }: { job: DownloadJob; onCancel: () => void }
           {ready ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : null}
           {STAGE_LABEL[job.stage] || STAGE_LABEL[job.status] || 'Working…'}
         </p>
-        <span className="text-xs tabular-nums text-muted">{Math.round(job.progress)}%</span>
+        <span className="text-xs tabular-nums text-muted">{percent}%</span>
       </div>
       <div
         className="progress-track mt-3"
@@ -268,9 +274,9 @@ function JobStatus({ job, onCancel }: { job: DownloadJob; onCancel: () => void }
         aria-label="Download progress"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(job.progress)}
+        aria-valuenow={percent}
       >
-        <div className="progress-fill" style={{ width: `${Math.max(4, job.progress)}%` }} />
+        <div className="progress-fill" style={{ width: `${Math.max(4, percent)}%` }} />
       </div>
       {failed ? (
         <p role="alert" className="mt-3 text-sm text-rose-500">

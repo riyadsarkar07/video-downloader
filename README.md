@@ -156,6 +156,9 @@ Backend:
 - `MAX_QUEUED_JOBS` — default `40`; extra jobs get `429 QUEUE_FULL`
 - `MAX_FILESIZE` — default `500M`
 - `MAX_DURATION_SEC` — default `10800`
+- `EXTRACT_RATE_LIMIT` — default `20` requests/min per IP
+- `DOWNLOAD_RATE_LIMIT` — default `8` requests/min per IP
+- `FILE_RATE_LIMIT` — default `60` requests/min per IP
 
 Never commit cookies or secrets.
 
@@ -163,11 +166,15 @@ Never commit cookies or secrets.
 
 Do **not** run yt-dlp inside Vercel serverless functions.
 
+See `DEPLOYMENT.md` for the full VPS/Docker/Caddy/Vercel runbook. Short version:
+
 ### Frontend on Vercel
 
-1. Deploy the Next.js app.
-2. Set `BACKEND_URL` to your public backend URL, for example `https://api.example.com`.
-3. `next.config.js` rewrites `/api/:path*` to that backend.
+1. Deploy the Next.js app (Framework preset: Next.js).
+2. Set `BACKEND_URL` to your public HTTPS backend URL, for example `https://api.example.com`.
+3. The server-side route handlers under `app/api/*` forward to `${BACKEND_URL}/api/*`.
+   `next.config.js` also defines a rewrite as a fallback, but explicit route handlers
+   take precedence and read `BACKEND_URL` at runtime.
 
 ### Backend on a VPS or container host
 
